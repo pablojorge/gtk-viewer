@@ -15,8 +15,24 @@ import optparse
 
 from monitor_proc import get_process_memory_usage
 
+# XXX al mover, si ya existe: 
+#       y es igual, preguntar si reemplazar?
+#       es distinto, proponer un nombre nuevo?
 # XXX hacer un cache limitado en lugar de cachear todo
-# XXX zoom para los animated gifs
+# XXX seleccionar nuevo file con Ctrl+'o' ?
+# XXX seleccionar destino con F3
+# XXX hacer que el combo de opciones aparezca desplegado y se vayan achicando
+#     a medida que se va escribiendo para que solo queden las que matchean
+#     (un sistema propio de completing?)
+# XXX se pierde el foco al comenzar a escribir el tag rapidamente 
+#     por lo que tarda en cargar las opciones (cargar en viewer app
+#     y darle la lista a selector, recargar al crear nuevo folder,
+#     puede tardar lo mismo al crear el model que se asocia al entry)
+# XXX apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
+#     los bindings, con un get que devuleve bindings de acuerdo al modo)
+# XXX tiempo de carga de los gifs animados (play/stop como workaround?)
+
+# XXX hacer un help
 
 # XXX hacer zoom in y out con mouse manteniendo el centro
 # XXX drag para mover la imagen
@@ -101,30 +117,30 @@ class ImageFile(File):
     def __init__(self, filename):
         File.__init__(self, filename)
         self.dimensions = None
-        self.pixbuf_anim = None
+        self.pixbuf = None
 
-    def __get_pixbuf_anim(self):
-        if not self.pixbuf_anim:
-            self.pixbuf_anim = gtk.gdk.PixbufAnimation(self.get_filename())
-        return self.pixbuf_anim
-
-    def get_pixbuf_anim_at_size(self, width, height):
-        #raise Exception("Not implemented")
-        return self.__get_pixbuf_anim()
-
-    def __get_pixbuf(self):
-        return self.__get_pixbuf_anim().get_static_image()
-
-    def get_pixbuf_at_size(self, width, height):
-        return self.__get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+    def get_pixbuf(self):
+        if not self.pixbuf:
+            self.pixbuf = gtk.gdk.pixbuf_new_from_file(self.get_filename())
+        return self.pixbuf
 
     def is_static_image(self):
-        return self.__get_pixbuf_anim().is_static_image()
+        return ".gif" not in self.get_basename() # XXX
+
+    def get_pixbuf_anim_at_size(self, width, height):
+        loader = gtk.gdk.PixbufLoader()
+        loader.set_size(width, height)
+        loader.write(open(self.get_filename(), "r").read())
+        loader.close()
+        return loader.get_animation()
+
+    def get_pixbuf_at_size(self, width, height):
+        return self.get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
 
     def get_dimensions(self):
         if not self.dimensions:
-            self.dimensions = ImageDimensions(self.__get_pixbuf().get_width(), 
-                                              self.__get_pixbuf().get_height())
+            self.dimensions = ImageDimensions(self.get_pixbuf().get_width(), 
+                                              self.get_pixbuf().get_height())
         return self.dimensions
 
 class FileManager:
@@ -406,20 +422,36 @@ class ThumbnailViewer(ImageViewer):
     def __init__(self, th_size):
         ImageViewer.__init__(self)
         self.th_size = th_size
-
-    def get_widget(self):
-        return self.widget
+        self.hidden = False
 
     def load(self, image_file):
         self.load_at_size(image_file, self.th_size, self.th_size)
 
     def redraw(self):
+        if self.hidden:
+            return
+
         dimensions = self.image_file.get_dimensions()
 
         width = int((dimensions.get_width() * self.zoom_factor) / 100)
         height = int((dimensions.get_height() * self.zoom_factor) / 100)
 
         self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
+
+    def hide(self):
+        self.hidden = True
+        self.widget.hide()
+
+    def show(self):
+        self.hidden = False
+        self.widget.show()
+        self.redraw()
+
+    def toggle_visible(self):
+        if self.hidden:
+            self.show()
+        else:
+            self.hide()
 
 class WidgetFactory:
     def __init__(self):
@@ -526,16 +558,16 @@ class ViewerApp:
         hbox.pack_start(ebox, False, False, 0)
 
         # Status Bar:
-        status_bar = gtk.HBox(False, 0)
-        vbox.pack_start(status_bar, False, False, 5)
+        self.status_bar = gtk.HBox(False, 0)
+        vbox.pack_start(self.status_bar, False, False, 5)
 
         self.file_info = gtk.Label()
         self.additional_info = gtk.Label()
         self.file_index = gtk.Label()
 
-        status_bar.pack_start(self.file_info, False, False, 10)
-        status_bar.pack_start(self.additional_info, False, False, 10)
-        status_bar.pack_end(self.file_index, False, False, 10)
+        self.status_bar.pack_start(self.file_info, False, False, 10)
+        self.status_bar.pack_start(self.additional_info, False, False, 10)
+        self.status_bar.pack_end(self.file_index, False, False, 10)
 
         # Initialize and run:
         if start_file:
@@ -550,7 +582,7 @@ class ViewerApp:
 
     def on_key_press_event(self, widget, event, data=None):
         key_name = gtk.gdk.keyval_name(event.keyval)
-        print "key pressed:", key_name
+        #print "key pressed:", key_name
 
         bindings = self.get_key_bindings()
 
@@ -619,9 +651,10 @@ class ViewerApp:
     ## Internal helpers
     def reload_viewer(self):
         self.image_viewer.load(self.file_manager.get_current_file())
+        self.th_left.load(self.file_manager.get_prev_file())
+        self.th_right.load(self.file_manager.get_next_file())
+
         self.fit_viewer(force=True)
-        self.th_left.load_at_size(self.file_manager.get_prev_file(), self.TH_SIZE, self.TH_SIZE)
-        self.th_right.load_at_size(self.file_manager.get_next_file(), self.TH_SIZE, self.TH_SIZE)
         self.refresh_info()
 
     def fit_viewer(self, force=False):
@@ -668,6 +701,7 @@ class ViewerApp:
             "Escape"      : self.quit_app,
             "F1"          : self.show_help,
             "F11"         : self.toggle_fullscreen,
+            "F12"         : self.toggle_thumbnails,
 
             ## Files navigation:
             "Home"        : self.first_image,
@@ -708,10 +742,16 @@ class ViewerApp:
     def toggle_fullscreen(self):
         if not self.fullscreen:
             self.window.fullscreen()
+            self.status_bar.hide()
             self.fullscreen = True
         else:
             self.window.unfullscreen()
+            self.status_bar.show()
             self.fullscreen = False
+
+    def toggle_thumbnails(self):
+        self.th_left.toggle_visible()
+        self.th_right.toggle_visible()
 
     def first_image(self):
         self.file_manager.go_first()
