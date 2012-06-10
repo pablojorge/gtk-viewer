@@ -2,6 +2,7 @@
 
 import os
 import sys
+import string
 
 import pygtk
 pygtk.require('2.0')
@@ -9,12 +10,13 @@ import gtk
 import gio
 
 import shutil
-import argparse
 
 # XXX color de fondo (black background)
-# XXX mkdir -p
+# XXX mejorar creacion de widgets
 
-# XXX hacer zoom in y out con mouse
+# XXX reusar data para no relodear todo el tiempo
+# XXX mejorar zoom para que no relodee
+# XXX hacer zoom in y out con mouse manteniendo el centro
 # XXX drag para mover la imagen
 
 # XXX si imagen no entra, arrows para moverse
@@ -83,6 +85,10 @@ class File:
         final = os.path.join(target, candidate)
         self.rename(final)
 
+    def trash(self):
+        gfile = gio.File(path=self.filename)
+        gfile.trash()
+
 class ImageFile(File):
     def __init__(self, filename):
         File.__init__(self, filename)
@@ -122,16 +128,16 @@ class FileManager:
         self.index = len(self.filelist) - 1
         self.on_list_modified()
 
-    def go_next(self):
-        self.index += 1
+    def go_forward(self, steps):
+        self.index += steps
         if self.index >= len(self.filelist):
-            self.index = 0
+            self.index = self.index - len(self.filelist)
         self.on_list_modified()
 
-    def go_prev(self):
-        self.index -= 1
+    def go_backward(self, steps):
+        self.index -= steps
         if self.index < 0:
-            self.index = len(self.filelist) - 1
+            self.index = len(self.filelist) + self.index
         self.on_list_modified()
 
     def rename_current(self, new_name):
@@ -152,6 +158,7 @@ class FileManager:
         current = self.get_current_file()
         orig_index = self.get_current_index()
         orig_filename = current.get_filename()
+        self.create_path(target)
         current.safe_move(target)
         new_filename = current.get_filename()
         self.on_current_eliminated()
@@ -166,9 +173,7 @@ class FileManager:
         return undo_action
 
     def delete_current(self):
-        gfile = gio.File(path=self.get_current_file().get_filename())
-        gfile.trash()
-
+        self.get_current_file().trash()
         self.on_current_eliminated()
 
     # Internal helpers:
@@ -182,8 +187,20 @@ class FileManager:
                 self.index = len(self.filelist) - 1
             self.on_list_modified()
 
+    def create_path(self, directory):
+        stack = []
+
+        while not os.path.isdir(directory):
+            directory, basename = os.path.split(directory)
+            stack.append(basename)
+
+        while stack:
+            basename = stack.pop()
+            directory = os.path.join(directory, basename)
+            os.mkdir(directory)
+
 class SelectorDialog:
-    def __init__(self, parent, target_dir, last_targets, callback):
+    def __init__(self, parent, initial_text, target_dir, last_targets, callback):
         self.target_dir = target_dir
         self.callback = callback
 
@@ -193,22 +210,22 @@ class SelectorDialog:
         label.set_text("Specify target directory:")
         self.window.vbox.pack_start(label, True, True, 5)
 
-        entry = gtk.Entry()
-        entry.connect("activate", self.on_entry_activate)
+        self.target_entry = gtk.Entry()
+        self.target_entry.insert_text(initial_text)
+        self.target_entry.connect("activate", self.on_entry_activate)
         completion = gtk.EntryCompletion()
         liststore = gtk.ListStore(str)
         for directory in sorted(self.__get_options()):
             liststore.append([directory.replace(target_dir, '')])
         completion.set_model(liststore)
-        entry.set_completion(completion)
+        self.target_entry.set_completion(completion)
         completion.set_text_column(0)
-        self.window.vbox.pack_start(entry, True, True, 5)
+        self.window.vbox.pack_start(self.target_entry, True, True, 5)
 
         label = gtk.Label()
         label.set_text("Choose previously used target:")
         self.window.vbox.pack_start(label, True, True, 5)
 
-        entry = gtk.Entry()
         combo = gtk.Combo()
         combo.entry.connect("activate", self.on_entry_activate)
         combo.entry.set_editable(False)
@@ -228,6 +245,8 @@ class SelectorDialog:
 
     def show(self):
         self.window.show_all()
+        self.target_entry.select_region(0,0)
+        self.target_entry.set_position(self.target_entry.get_text_length())
 
 class RenameDialog:
     def __init__(self, parent, basename, callback):
@@ -240,12 +259,11 @@ class RenameDialog:
         label.set_text("New name:")
         self.window.action_area.pack_start(label, True, True, 5)
 
-        entry = gtk.Entry()
-        entry.connect("activate", self.on_entry_activate)
-        entry.set_text(basename)
-        #entry.select_region(0, entry.get_text().rindex('.')) # XXX ???
+        self.entry = gtk.Entry()
+        self.entry.connect("activate", self.on_entry_activate)
+        self.entry.set_text(basename)
 
-        self.window.action_area.pack_start(entry, True, True, 5)
+        self.window.action_area.pack_start(self.entry, True, True, 5)
 
     def on_entry_activate(self, entry):
         if entry.get_text() != self.basename:
@@ -254,6 +272,7 @@ class RenameDialog:
 
     def show(self):
         self.window.show_all()
+        self.entry.select_region(0, self.entry.get_text().rindex('.'))
 
 class HelpDialog:
     def __init__(self, parent, bindings):
@@ -389,37 +408,67 @@ class ViewerApp:
 
         go_back = gtk.Image()
         go_back.set_from_stock(gtk.STOCK_GO_BACK, 1)
-        hbox.pack_start(go_back, False, False, 0)
+        ebox = gtk.EventBox()
+        ebox.connect("button-press-event", self.on_th_prev_press)
+        ebox.connect("scroll-event", self.on_th_scroll)
+        ebox.add(go_back)
+        ebox.show()
+        hbox.pack_start(ebox, False, False, 0)
         go_back.show()
 
         self.th_left = ImageViewer()
         widget = self.th_left.get_widget()
-        hbox.pack_start(widget, False, False, 0)
+        ebox = gtk.EventBox()
+        ebox.connect("button-press-event", self.on_th_prev_press)
+        ebox.connect("scroll-event", self.on_th_scroll)
+        ebox.add(widget)
+        ebox.show()
+        hbox.pack_start(ebox, False, False, 0)
         widget.show()
 
         scrolled = gtk.ScrolledWindow()
         scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scrolled.connect("scroll-event", self.on_viewer_scroll)
         hbox.pack_start(scrolled, True, True, 0)
         scrolled.show()
         #color = gtk.gdk.color_parse("#000000")
         #self.window.modify_bg(gtk.STATE_NORMAL, color)
-        self.image_viewer = ImageViewer()
+        self.image_viewer = ImageViewer()#self.on_viewer_resize) # XXX
         widget = self.image_viewer.get_widget()
         scrolled.add_with_viewport(widget)
         widget.show()
 
-        self.th_right = ImageViewer(self.on_viewer_resize)
+        self.th_right = ImageViewer()
         widget = self.th_right.get_widget()
-        hbox.pack_start(widget, False, False, 0)
+        ebox = gtk.EventBox()
+        ebox.connect("button-press-event", self.on_th_next_press)
+        ebox.connect("scroll-event", self.on_th_scroll)
+        ebox.add(widget)
+        ebox.show()
+        hbox.pack_start(ebox, False, False, 0)
         widget.show()
 
         go_forward = gtk.Image()
         go_forward.set_from_stock(gtk.STOCK_GO_FORWARD, 1)
-        hbox.pack_start(go_forward, False, False, 0)
+        ebox = gtk.EventBox()
+        ebox.connect("button-press-event", self.on_th_next_press)
+        ebox.connect("scroll-event", self.on_th_scroll)
+        ebox.add(go_forward)
+        ebox.show()
+        hbox.pack_start(ebox, False, False, 0)
         go_forward.show()
 
-        self.status_bar = gtk.Statusbar()
+        self.status_bar = gtk.HBox(False, 5)
         vbox.pack_start(self.status_bar, False, False, 0)
+        self.file_info = gtk.Label()
+        self.file_info.show()
+        self.status_bar.pack_start(self.file_info, False, False, 0)
+        self.additional_info = gtk.Label()
+        self.additional_info.show()
+        self.status_bar.pack_start(self.additional_info, False, False, 0)
+        self.file_index = gtk.Label()
+        self.file_index.show()
+        self.status_bar.pack_end(self.file_index, False, False, 0)
         self.status_bar.show()
 
         self.reload_viewer()
@@ -437,28 +486,50 @@ class ViewerApp:
 
         if key_name in bindings:
             bindings[key_name]()
+        elif key_name in string.letters:
+            self.show_selector(key_name)        
 
     def on_viewer_resize(self, widget, allocation, data=None):
         self.image_viewer.zoom_at_size(allocation.x - allocation.width, 
                                        allocation.height - allocation.y)
         self.refresh_info()
 
+    def on_th_prev_press(self, widget, event, data=None):
+        self.prev_image()
+
+    def on_th_next_press(self, widget, event, data=None):
+        self.next_image()
+
+    def on_th_scroll(self, widget, event, data=None):
+        if event.direction == gtk.gdk.SCROLL_UP:
+            self.prev_image()
+        else:
+            self.next_image()
+
+    def on_viewer_scroll(self, widget, event, data=None):
+        if event.direction == gtk.gdk.SCROLL_UP:
+            factor = 1.05
+        else:
+            factor = 0.95
+
+        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
+        self.refresh_info()
+        return True # to prevent further processing
     ##
 
     ## Internal callbacks
     def on_target_selected(self, target):
         current = self.file_manager.get_current_file()
 
-        if not os.path.isdir(target):
-            if QuestionDialog(self.window, 
-                              "Create directory %s and move %s there?" % \
-                              (target, current.get_basename())).run():
-                os.mkdir(target)
-            else:
-                return
+        if (not os.path.isdir(target) and 
+            not QuestionDialog(self.window, 
+                               "Create directory %s and move %s there?" % \
+                               (target, current.get_basename())).run()):
+            return
 
         if target in self.last_targets:
             self.last_targets.remove(target)
+
         self.last_targets.insert(0, target)
 
         self.undo_queue.append(self.file_manager.move_current(target))
@@ -494,51 +565,55 @@ class ViewerApp:
     def refresh_status(self):
         image_file = self.file_manager.get_current_file()
 
-        status = "%s pixels %d%% %s %d/%d" % (image_file.get_dimensions(), 
-                                              self.image_viewer.get_zoom_factor() * 100,
-                                              image_file.get_filesize(), 
-                                              self.file_manager.get_current_index() + 1, 
-                                              self.file_manager.get_list_length())
+        file_info = "%s pixels  %s  %d%%" % (image_file.get_dimensions(),
+                                             image_file.get_filesize(), 
+                                             self.image_viewer.get_zoom_factor() * 100)
+        file_index = "%d/%d" % (self.file_manager.get_current_index() + 1, 
+                                self.file_manager.get_list_length())
+        additional_info = ''
 
         if self.last_targets:
             last = self.last_targets[0].replace(self.target_dir, '')
-            status += " (press 'r' to repeat '%s')" % last
+            additional_info = " (press '.' to repeat '%s')" % last
 
-        container_id = self.status_bar.get_context_id("Status Bar")
-        self.status_bar.pop(container_id)
-        self.status_bar.push(container_id, status)
+        self.file_info.set_text(file_info)
+        self.additional_info.set_text(additional_info)
+        self.file_index.set_text(file_index)
     ##
 
     ## Key Bindings
     def get_key_bindings(self):
         return {
             ## Generic actions:
-            "q" : self.quit_app,
-            "Escape" : self.quit_app,
-            "h" : self.show_help,
+            "Escape"      : self.quit_app,
+            "F1"          : self.show_help,
+
             ## Files navigation:
-            "Home" : self.first_image,
-            "End" : self.last_image,
-            "space" : self.next_image,
-            "Right" : self.next_image,
-            "Return" : self.next_image,
-            "BackSpace" : self.prev_image,
-            "Left" : self.prev_image,
+            "Home"        : self.first_image,
+            "End"         : self.last_image,
+            "Page_Down"   : self.jump_forward,
+            "Page_Up"     : self.jump_backward,
+            "space"       : self.next_image,
+            "Right"       : self.next_image,
+            "Return"      : self.next_image,
+            "BackSpace"   : self.prev_image,
+            "Left"        : self.prev_image,
+
             ## Files manipulation:
-            "Down" : self.apply_category,
-            "Tab" : self.apply_category,
-            "F2" : self.rename_current,
-            "r" : self.repeat_selection,
-            "u" : self.undo_last,
-            "d" : self.delete_image,
-            "Delete" : self.delete_image,
+            "Down"        : self.show_selector,
+            "Tab"         : self.show_selector,
+            "F2"          : self.rename_current,
+            "period"      : self.repeat_selection,
+            "comma"       : self.undo_last,
+            "Delete"      : self.delete_image,
+
             ## Zoom:
-            "1" : self.zoom_100,
-            "0" : self.zoom_fit,
-            "KP_Add" : self.zoom_in,
-            "plus" : self.zoom_in,
+            "1"           : self.zoom_100,
+            "0"           : self.zoom_fit,
+            "KP_Add"      : self.zoom_in,
+            "plus"        : self.zoom_in,
             "KP_Subtract" : self.zoom_out,
-            "minus" : self.zoom_out,
+            "minus"       : self.zoom_out,
         }
 
     ## action handlers
@@ -555,14 +630,21 @@ class ViewerApp:
     def last_image(self):
         self.file_manager.go_last()
 
+    def jump_forward(self):
+        self.file_manager.go_forward(10)
+
+    def jump_backward(self):
+        self.file_manager.go_backward(10)
+
     def next_image(self):
-        self.file_manager.go_next()
+        self.file_manager.go_forward(1)
 
     def prev_image(self):
-        self.file_manager.go_prev()
+        self.file_manager.go_backward(1)
 
-    def apply_category(self):
-        selector = SelectorDialog(self.window, 
+    def show_selector(self, initial_text=''):
+        selector = SelectorDialog(self.window,
+                                  initial_text, 
                                   self.target_dir, 
                                   self.last_targets, 
                                   self.on_target_selected)
@@ -602,11 +684,11 @@ class ViewerApp:
         self.reload_viewer()
 
     def zoom_in(self):
-        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() + 0.20)
+        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.20)
         self.refresh_info()
 
     def zoom_out(self):
-        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() - 0.20)
+        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.80)
         self.refresh_info()
     ##
 
@@ -614,13 +696,7 @@ class ViewerApp:
         gtk.main()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('files', help='Files to organize', metavar='FILE', nargs='+')
-    parser.add_argument('target', help='Target directory', metavar='TARGET')
-
-    args = parser.parse_args()
-
-    app = ViewerApp(args.files, args.target)
+    files = sys.argv[1:]
+    app = ViewerApp(files, None)
     app.run()
 
