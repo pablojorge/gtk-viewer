@@ -21,21 +21,6 @@ import argparse
 # XXX si imagen no entra, arrows para moverse
 # XXX drag para mover la imagen
 
-def safe_move(filename, target):
-    candidate = os.path.split(filename)[-1]
-
-    index = 0
-    while os.path.isfile(os.path.join(target, candidate)):
-        name = os.path.split(''.join(filename.split('.')[:-1]))[-1]
-        ext = filename.split('.')[-1]
-        index += 1
-        candidate = "%s (%d).%s" % (name, index, ext)
-
-    final = os.path.join(target, candidate)
-    shutil.move(filename, final)
-
-    return final
-
 class ImageDimensions:
     def __init__(self, width, height):
         self.width = width
@@ -65,7 +50,7 @@ class FileSize:
         else:
             return "%.2f Mb" % (self.size/(1024*1024))
 
-class ImageFile:
+class File:
     def __init__(self, filename):
         self.filename = filename
 
@@ -75,14 +60,35 @@ class ImageFile:
     def get_basename(self):
         return os.path.split(self.filename)[-1]
 
-    def get_dimensions(self):
-        pixbuf = gtk.gdk.pixbuf_new_from_file(self.filename)
-        return ImageDimensions(pixbuf.get_width(), pixbuf.get_height())
-
     def get_filesize(self):
         stat = os.stat(self.filename)
         size = stat.st_size
         return FileSize(size)
+
+    def rename(self, new_name):
+        shutil.move(self.filename, new_name)
+        self.filename = new_name
+
+    def move_to_dir(self, target):
+        candidate = os.path.split(self.filename)[-1]
+
+        index = 0
+        while os.path.isfile(os.path.join(target, candidate)):
+            name = os.path.split(''.join(filename.split('.')[:-1]))[-1]
+            ext = filename.split('.')[-1]
+            index += 1
+            candidate = "%s (%d).%s" % (name, index, ext)
+
+        final = os.path.join(target, candidate)
+        self.rename(final)
+
+class ImageFile(File):
+    def __init__(self, filename):
+        File.__init__(self, filename)
+
+    def get_dimensions(self):
+        pixbuf = gtk.gdk.pixbuf_new_from_file(self.get_filename())
+        return ImageDimensions(pixbuf.get_width(), pixbuf.get_height())
 
 class SelectorDialog:
     def __init__(self, parent, target_dir, callback):
@@ -131,6 +137,31 @@ class HelpDialog:
     def show(self):
         self.window.show_all()
 
+class InfoDialog:
+    def __init__(self, message):
+        self.md = gtk.MessageDialog(self.window, 
+                                    gtk.DIALOG_DESTROY_WITH_PARENT, 
+                                    gtk.MESSAGE_INFO,
+                                    gtk.BUTTONS_OK,
+                                    message)
+
+    def run(self):
+        self.md.run()
+        self.md.destroy()
+
+class QuestionDialog:
+    def __init__(self, question):
+        self.md = gtk.MessageDialog(self.window, 
+                                    gtk.DIALOG_DESTROY_WITH_PARENT, 
+                                    gtk.MESSAGE_QUESTION,
+                                    gtk.BUTTONS_YES_NO,
+                                    question)
+
+    def run(self):
+        response = self.md.run()
+        self.md.destroy()
+        return response == gtk.RESPONSE_YES
+
 class FileManager:
     def __init__(self, filelist):
         self.filelist = filelist
@@ -155,6 +186,18 @@ class FileManager:
         if self.index < 0:
             self.index = len(self.filelist) - 1
 
+    def move_current(self):
+        if not self.current_target:
+            InfoDialog("There isn't a selected target yet").run()
+            return
+
+        current = self.filelist[self.fileindex]
+        final_dest = safe_move(current_image, self.current_target)
+        print "'%s' moved to '%s'" % (current_image, final_dest)
+
+        self.undo.append((current_image, final_dest))
+        self.on_current_altered()
+
 class ImageViewer:
     def __init__(self):
         self.widget = gtk.Image()
@@ -170,6 +213,10 @@ class ImageViewer:
     def load(self, image_file):
         self.zoom_factor = 1
         self.image_file = image_file
+        self.redraw()
+
+    def adjust_zoom(self, delta):
+        self.zoom_factor += delta
         self.redraw()
 
     def redraw(self):
@@ -240,6 +287,7 @@ class ViewerApp:
             "Left" : self.prev_image,
             "Down" : self.apply_category,
             "Tab" : self.apply_category,
+            #"F2" : self.rename_current, # XXX
             "r" : self.move_current,
             "u" : self.undo_last,
             "h" : self.show_help,
@@ -262,33 +310,41 @@ class ViewerApp:
         current = self.file_manager.get_current_file()
 
         if not os.path.isdir(target):
-            if self.confirm("Create directory %s and move %s there?" % \
-                            (target, current.get_basename())):
+            if QuestionDialog("Create directory %s and move %s there?" % \
+                              (target, current.get_basename())).run():
                 os.mkdir(target) # XXX mkdir -p
             else:
                 return
 
         self.current_target = target
-        self.update_status("Current", "Press 'r' to repeat '%s'" % target)
         self.move_current()
     ## 
 
     ## Internal helpers
     def reload_viewer(self):
         self.image_viewer.load(self.file_manager.get_current_file())
+        self.refresh_info()
+
+    def refresh_info(self):
         self.refresh_title()
+        self.refresh_status()
 
     def refresh_title(self):
-        image_file = ImageFile(self.file_manager.get_current_file())
+        image_file = self.file_manager.get_current_file()
+        self.window.set_title(image_file.get_basename())
 
-        title = "%s (%s, %d%%, %s, %d/%d)" % (image_file.get_basename(), 
-                                              image_file.get_dimensions(), 
+    def refresh_status(self):
+        image_file = self.file_manager.get_current_file()
+
+        status = "%s pixels %d%% %s %d/%d" % (image_file.get_dimensions(), 
                                               self.image_viewer.get_zoom_factor() * 100,
                                               image_file.get_filesize(), 
                                               self.file_manager.get_current_index()+1, 
                                               self.file_manager.get_list_length())
-        self.window.set_title(title)
-        self.update_status("Info", title)
+
+        container_id = self.status_bar.get_context_id("Status Bar")
+        self.status_bar.pop(container_id)
+        self.status_bar.push(container_id, status)
     ##
 
     ## action handlers
@@ -304,29 +360,13 @@ class ViewerApp:
         selector = SelectorDialog(self.window, self.target_dir, self.on_target_selected)
         selector.show()
 
-    def move_current(self):
-        if not self.current_target:
-            self.tell_user("There isn't a selected target yet")
-            return
-
-        current_image = self.filelist[self.fileindex]
-        final_dest = safe_move(current_image, self.current_target)
-        print "'%s' moved to '%s'" % (current_image, final_dest)
-
-        self.undo.append((current_image, final_dest))
-
-        self.on_current_altered()
-
-    # XXX rename
-    # XXX info dialog
-    # XXX question dialog
     def show_help(self):
         helpd = HelpDialog(self.window, "<help>") # XXX
         helpd.show()
 
     def undo_last(self):
         if not self.undo:
-            self.tell_user("Nothing to undo!")
+            InfoDialog("Nothing to undo!").run()
             return
 
         orig_path, moved_path = self.undo.pop() 
@@ -335,36 +375,11 @@ class ViewerApp:
         self.filelist.insert(self.fileindex, orig_path)
         self.reload_viewer()
 
-    def update_status(self, context, message):
-        container_id = self.status_bar.get_context_id(context)
-        self.status_bar.pop(container_id)
-        self.status_bar.push(container_id, message)
-
-    def tell_user(self, message):
-        md = gtk.MessageDialog(self.window, 
-                               gtk.DIALOG_DESTROY_WITH_PARENT, 
-                               gtk.MESSAGE_INFO,
-                               gtk.BUTTONS_OK,
-                               message)
-        md.run()
-        md.destroy()
-
-    def confirm(self, question):
-        md = gtk.MessageDialog(self.window, 
-                               gtk.DIALOG_DESTROY_WITH_PARENT, 
-                               gtk.MESSAGE_QUESTION,
-                               gtk.BUTTONS_YES_NO,
-                               question)
-        response = md.run()
-        md.destroy()
-
-        return response == gtk.RESPONSE_YES
-
     def delete_image(self):
         filename = self.filelist[self.fileindex]
         basename = os.path.split(filename)[-1]
 
-        if self.confirm("Send '%s' to the trash?" % basename):
+        if QuestionDialog("Send '%s' to the trash?" % basename).run():
             #print "Deleting %s..." % filename
 
             # Delete the file:
@@ -374,12 +389,12 @@ class ViewerApp:
             self.on_current_altered()
 
     def zoom_in(self):
-        self.zoom_factor += 0.1
-        self.reload_viewer()
+        self.image_viewer.adjust_zoom(+0.1)
+        self.refresh_info()
 
     def zoom_out(self):
-        self.zoom_factor -= 0.1
-        self.reload_viewer()
+        self.image_viewer.adjust_zoom(-0.1)
+        self.refresh_info()
 
     def on_current_altered(self):
         # Eliminate file from list:
@@ -387,7 +402,7 @@ class ViewerApp:
 
         # Exit if there are no more files:
         if not self.filelist:
-            self.tell_user("No more files, exiting")
+            InfoDialog("No more files, exiting").run()
             self.quit_app()
         else:
             if self.fileindex >= len(self.filelist):
@@ -399,7 +414,7 @@ class ViewerApp:
     def quit_app(self):
         gtk.Widget.destroy(self.window)
 
-    def main(self):
+    def run(self):
         gtk.main()
 
 if __name__ == "__main__":
@@ -411,5 +426,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     app = ViewerApp(args.files, args.target)
-    app.main()
+    app.run()
 
