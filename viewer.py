@@ -9,16 +9,15 @@ pygtk.require('2.0')
 import gtk
 import gio
 
+import glob
 import shutil
+import optparse
 
 from monitor_proc import get_process_memory_usage
 
-# XXX arreglar toma de parametros
 # XXX hacer un cache limitado en lugar de cachear todo
-# XXX mejorar creacion de widgets (emprolijar)
-# XXX color de fondo (black background)
-
 # XXX zoom para los animated gifs
+
 # XXX hacer zoom in y out con mouse manteniendo el centro
 # XXX drag para mover la imagen
 
@@ -61,15 +60,21 @@ class File:
         return self.filename
 
     def get_dirname(self):
-        return os.path.split(self.filename)[0]
+        return os.path.dirname(self.filename)
 
     def get_basename(self):
-        return os.path.split(self.filename)[-1]
+        return os.path.basename(self.filename)
 
     def get_filesize(self):
         stat = os.stat(self.filename)
         size = stat.st_size
         return Size(size)
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.filename == other
+        else:
+            raise Exception("Can't compare File to " + repr(other))
 
     def rename(self, new_name):
         shutil.move(self.filename, new_name)
@@ -98,27 +103,28 @@ class ImageFile(File):
         self.dimensions = None
         self.pixbuf_anim = None
 
-    def get_pixbuf_anim(self):
+    def __get_pixbuf_anim(self):
         if not self.pixbuf_anim:
             self.pixbuf_anim = gtk.gdk.PixbufAnimation(self.get_filename())
         return self.pixbuf_anim
 
     def get_pixbuf_anim_at_size(self, width, height):
-        raise NotImplemented()
+        #raise Exception("Not implemented")
+        return self.__get_pixbuf_anim()
 
-    def get_pixbuf(self):
-        return self.get_pixbuf_anim().get_static_image()
+    def __get_pixbuf(self):
+        return self.__get_pixbuf_anim().get_static_image()
 
     def get_pixbuf_at_size(self, width, height):
-        return self.get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+        return self.__get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
 
     def is_static_image(self):
-        return self.get_pixbuf_anim().is_static_image()
+        return self.__get_pixbuf_anim().is_static_image()
 
     def get_dimensions(self):
         if not self.dimensions:
-            self.dimensions = ImageDimensions(self.get_pixbuf().get_width(), 
-                                              self.get_pixbuf().get_height())
+            self.dimensions = ImageDimensions(self.__get_pixbuf().get_width(), 
+                                              self.__get_pixbuf().get_height())
         return self.dimensions
 
 class FileManager:
@@ -162,6 +168,10 @@ class FileManager:
         self.index -= steps
         if self.index < 0:
             self.index = len(self.filelist) + self.index
+        self.on_list_modified()
+
+    def go_file(self, filename):
+        self.index = self.filelist.index(filename)
         self.on_list_modified()
 
     def rename_current(self, new_name):
@@ -384,20 +394,76 @@ class ImageViewer:
         if self.image_file.is_static_image():
             self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
         else:
-            self.widget.set_from_animation(self.image_file.get_pixbuf_anim())
+            self.widget.set_from_animation(self.image_file.get_pixbuf_anim_at_size(width, height))
 
     def force_zoom(self, width, height):
         im_dim = self.image_file.get_dimensions()
-        zw = (float(width) / im_dim.get_width()) * 100
-        zh = (float(height) / im_dim.get_height()) * 100
+        zw = (float(width) / im_dim.get_width()) * 99
+        zh = (float(height) / im_dim.get_height()) * 99
         self.set_zoom_factor(min(zw, zh))
+
+class ThumbnailViewer(ImageViewer):
+    def __init__(self, th_size):
+        ImageViewer.__init__(self)
+        self.th_size = th_size
+
+    def get_widget(self):
+        return self.widget
+
+    def load(self, image_file):
+        self.load_at_size(image_file, self.th_size, self.th_size)
+
+    def redraw(self):
+        dimensions = self.image_file.get_dimensions()
+
+        width = int((dimensions.get_width() * self.zoom_factor) / 100)
+        height = int((dimensions.get_height() * self.zoom_factor) / 100)
+
+        self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
+
+class WidgetFactory:
+    def __init__(self):
+        pass
+
+    def get_window(self, width, height, on_destroy, on_key_press_event):
+        window = gtk.Window(gtk.WINDOW_TOPLEVEL)
+        window.set_default_size(width, height)
+        window.connect("destroy", on_destroy)
+        window.connect("key_press_event", on_key_press_event)
+        window.set_position(gtk.WIN_POS_CENTER)
+        return window
+
+    def get_image_from_stock(self, stock_id, size):
+        image = gtk.Image()
+        image.set_from_stock(stock_id, size)
+        return image
+
+    def get_event_box(self, child, bg_color, on_button_press_event, on_scroll_event):
+        ebox = gtk.EventBox()
+        ebox.connect("button-press-event", on_button_press_event)
+        ebox.connect("scroll-event", on_scroll_event)
+        ebox.add(child)
+        ebox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
+        return ebox
+
+    def get_scrolled(self, child, bg_color, on_scroll_event, on_size_allocate):
+        scrolled = gtk.ScrolledWindow()
+        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scrolled.connect("scroll-event", on_scroll_event)
+        scrolled.connect("size-allocate", on_size_allocate)
+
+        scrolled.add_with_viewport(child)
+        child.get_parent().modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
+
+        return scrolled
 
 class ViewerApp:
     DEF_WIDTH = 640
     DEF_HEIGHT = 480
     TH_SIZE = 200
+    BG_COLOR = "#000000"
 
-    def __init__(self, filelist, target_dir):
+    def __init__(self, filelist, start_file, target_dir):
         self.file_manager = FileManager(filelist,
                                         self.on_list_empty,
                                         self.on_list_modified)
@@ -407,90 +473,76 @@ class ViewerApp:
         self.undo_queue = []
         self.fullscreen = False
 
-        self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
-        self.window.set_border_width(5)
-        self.window.set_default_size(self.DEF_WIDTH, self.DEF_HEIGHT)
-        self.window.connect("destroy", self.on_destroy)
-        self.window.connect("key_press_event", self.on_key_press_event)
-        self.window.set_position(gtk.WIN_POS_CENTER)
+        factory = WidgetFactory()
 
-        vbox = gtk.VBox(False, 5)
+        self.window = factory.get_window(width=self.DEF_WIDTH, 
+                                         height=self.DEF_HEIGHT,
+                                         on_destroy=self.on_destroy,
+                                         on_key_press_event=self.on_key_press_event)
+
+        vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
-        vbox.show()
 
-        hbox = gtk.HBox(False, 5)
+        hbox = gtk.HBox(False, 0)
         vbox.pack_start(hbox, True, True, 0)
-        hbox.show()
 
-        go_back = gtk.Image()
-        go_back.set_from_stock(gtk.STOCK_GO_BACK, 1)
-        ebox = gtk.EventBox()
-        ebox.connect("button-press-event", self.on_th_prev_press)
-        ebox.connect("scroll-event", self.on_th_scroll)
-        ebox.add(go_back)
-        ebox.show()
+        # Left thumbnail
+        go_back = factory.get_image_from_stock(gtk.STOCK_GO_BACK, 1)
+        ebox = factory.get_event_box(child=go_back,
+                                     bg_color=self.BG_COLOR,
+                                     on_button_press_event=self.on_th_prev_press,
+                                     on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
-        go_back.show()
 
-        self.th_left = ImageViewer()
-        widget = self.th_left.get_widget()
-        ebox = gtk.EventBox()
-        ebox.connect("button-press-event", self.on_th_prev_press)
-        ebox.connect("scroll-event", self.on_th_scroll)
-        ebox.add(widget)
-        ebox.show()
+        self.th_left = ThumbnailViewer(self.TH_SIZE)
+        ebox = factory.get_event_box(child=self.th_left.get_widget(),
+                                     bg_color=self.BG_COLOR,
+                                     on_button_press_event=self.on_th_prev_press,
+                                     on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
-        widget.show()
 
-        self.scrolled = gtk.ScrolledWindow()
-        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        self.scrolled.connect("scroll-event", self.on_viewer_scroll)
-        self.scrolled_size = None
-        self.scrolled.connect("size-allocate", self.on_viewer_size_allocate)
-        hbox.pack_start(self.scrolled, True, True, 0)
-        self.scrolled.show()
-        #color = gtk.gdk.color_parse("#000000")
-        #self.window.modify_bg(gtk.STATE_NORMAL, color)
+        # Main viewer
         self.image_viewer = ImageViewer() 
-        widget = self.image_viewer.get_widget()
-        self.scrolled.add_with_viewport(widget)
-        widget.show()
+        self.scrolled_size = None
+        self.scrolled = factory.get_scrolled(child=self.image_viewer.get_widget(),
+                                             bg_color=self.BG_COLOR,
+                                             on_scroll_event=self.on_viewer_scroll,
+                                             on_size_allocate=self.on_viewer_size_allocate)
+        hbox.pack_start(self.scrolled, True, True, 0)
 
-        self.th_right = ImageViewer()
-        widget = self.th_right.get_widget()
-        ebox = gtk.EventBox()
-        ebox.connect("button-press-event", self.on_th_next_press)
-        ebox.connect("scroll-event", self.on_th_scroll)
-        ebox.add(widget)
-        ebox.show()
+        # Right thumbnail
+        self.th_right = ThumbnailViewer(self.TH_SIZE)
+        ebox = factory.get_event_box(child=self.th_right.get_widget(),
+                                     bg_color=self.BG_COLOR,
+                                     on_button_press_event=self.on_th_next_press,
+                                     on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
-        widget.show()
 
-        go_forward = gtk.Image()
-        go_forward.set_from_stock(gtk.STOCK_GO_FORWARD, 1)
-        ebox = gtk.EventBox()
-        ebox.connect("button-press-event", self.on_th_next_press)
-        ebox.connect("scroll-event", self.on_th_scroll)
-        ebox.add(go_forward)
-        ebox.show()
+        go_forward = factory.get_image_from_stock(gtk.STOCK_GO_FORWARD, 1)
+        ebox = factory.get_event_box(child=go_forward,
+                                     bg_color=self.BG_COLOR,
+                                     on_button_press_event=self.on_th_next_press,
+                                     on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
-        go_forward.show()
 
-        self.status_bar = gtk.HBox(False, 5)
-        vbox.pack_start(self.status_bar, False, False, 0)
+        # Status Bar:
+        status_bar = gtk.HBox(False, 0)
+        vbox.pack_start(status_bar, False, False, 5)
+
         self.file_info = gtk.Label()
-        self.file_info.show()
-        self.status_bar.pack_start(self.file_info, False, False, 0)
         self.additional_info = gtk.Label()
-        self.additional_info.show()
-        self.status_bar.pack_start(self.additional_info, False, False, 0)
         self.file_index = gtk.Label()
-        self.file_index.show()
-        self.status_bar.pack_end(self.file_index, False, False, 0)
-        self.status_bar.show()
+
+        status_bar.pack_start(self.file_info, False, False, 10)
+        status_bar.pack_start(self.additional_info, False, False, 10)
+        status_bar.pack_end(self.file_index, False, False, 10)
+
+        # Initialize and run:
+        if start_file:
+            self.file_manager.go_file(start_file)
 
         self.reload_viewer()
-        self.window.show()
+        self.window.show_all()
 
     ## Gtk event handlers
     def on_destroy(self, widget):
@@ -498,7 +550,7 @@ class ViewerApp:
 
     def on_key_press_event(self, widget, event, data=None):
         key_name = gtk.gdk.keyval_name(event.keyval)
-        #print "key pressed:", key_name
+        print "key pressed:", key_name
 
         bindings = self.get_key_bindings()
 
@@ -680,6 +732,10 @@ class ViewerApp:
         self.file_manager.go_backward(1)
 
     def show_selector(self, initial_text=''):
+        if not self.target_dir:
+            InfoDialog(self.window, "No target directory was selected").run()
+            return
+
         selector = SelectorDialog(self.window,
                                   initial_text, 
                                   self.target_dir, 
@@ -733,8 +789,49 @@ class ViewerApp:
     def run(self):
         gtk.main()
 
-if __name__ == "__main__":
-    files = sys.argv[1:]
-    app = ViewerApp(files, None)
+def get_files_from_dir(directory):
+    known_file_ext = ["jpg", "png", "gif"]
+
+    files = []
+
+    for filename in glob.glob(os.path.join(directory, "*")):
+        for file_ext in known_file_ext:
+            if ("." + file_ext) in filename.lower():
+                files.append(filename)
+
+    return sorted(files)
+
+def main():
+    parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
+
+    parser.add_option("", "--target", dest="target",
+                      help="Directory containing the categories")
+    
+    options, args = parser.parse_args()
+
+    target = options.target
+    files = args
+    start_file = None
+
+    if not files:
+        print "No files given!\n"
+        parser.print_help()
+        return
+
+    if len(files) == 1:
+        if os.path.isdir(files[0]):
+            files = get_files_from_dir(files[0])
+            if not target:
+                target = files[0]
+        else:
+            start_file = files[0]
+            files = get_files_from_dir(os.path.dirname(files[0]))
+    elif len(files) > 1:
+        # assume all are files...
+        pass
+
+    app = ViewerApp(files, start_file, target)
     app.run()
 
+if __name__ == "__main__":
+    main()
