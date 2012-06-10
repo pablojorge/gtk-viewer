@@ -11,11 +11,14 @@ import gio
 
 import shutil
 
-# XXX color de fondo (black background)
-# XXX mejorar creacion de widgets
+from monitor_proc import get_process_memory_usage
 
-# XXX reusar data para no relodear todo el tiempo
-# XXX mejorar zoom para que no relodee
+# XXX arreglar toma de parametros
+# XXX hacer un cache limitado en lugar de cachear todo
+# XXX mejorar creacion de widgets (emprolijar)
+# XXX color de fondo (black background)
+
+# XXX zoom para los animated gifs
 # XXX hacer zoom in y out con mouse manteniendo el centro
 # XXX drag para mover la imagen
 
@@ -35,7 +38,7 @@ class ImageDimensions:
     def __str__(self):
         return "%dx%d" % (self.width, self.height)
 
-class FileSize:
+class Size:
     def __init__(self, size):
         self.size = size
 
@@ -66,7 +69,7 @@ class File:
     def get_filesize(self):
         stat = os.stat(self.filename)
         size = stat.st_size
-        return FileSize(size)
+        return Size(size)
 
     def rename(self, new_name):
         shutil.move(self.filename, new_name)
@@ -92,10 +95,31 @@ class File:
 class ImageFile(File):
     def __init__(self, filename):
         File.__init__(self, filename)
+        self.dimensions = None
+        self.pixbuf_anim = None
+
+    def get_pixbuf_anim(self):
+        if not self.pixbuf_anim:
+            self.pixbuf_anim = gtk.gdk.PixbufAnimation(self.get_filename())
+        return self.pixbuf_anim
+
+    def get_pixbuf_anim_at_size(self, width, height):
+        raise NotImplemented()
+
+    def get_pixbuf(self):
+        return self.get_pixbuf_anim().get_static_image()
+
+    def get_pixbuf_at_size(self, width, height):
+        return self.get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+
+    def is_static_image(self):
+        return self.get_pixbuf_anim().is_static_image()
 
     def get_dimensions(self):
-        pixbuf = gtk.gdk.pixbuf_new_from_file(self.get_filename())
-        return ImageDimensions(pixbuf.get_width(), pixbuf.get_height())
+        if not self.dimensions:
+            self.dimensions = ImageDimensions(self.get_pixbuf().get_width(), 
+                                              self.get_pixbuf().get_height())
+        return self.dimensions
 
 class FileManager:
     def __init__(self, filelist, on_list_empty, on_list_modified):
@@ -317,11 +341,9 @@ class QuestionDialog:
         return response == gtk.RESPONSE_YES
 
 class ImageViewer:
-    def __init__(self, on_resize=None):
+    def __init__(self):
         self.widget = gtk.Image()
-        if on_resize:
-            self.widget.connect("size-allocate", on_resize)
-        self.zoom_factor = 1
+        self.zoom_factor = 100
         self.image_file = None
 
     def get_widget(self):
@@ -331,12 +353,12 @@ class ImageViewer:
         return self.zoom_factor
 
     def set_zoom_factor(self, zoom_factor):
-        if zoom_factor > 0:
+        if zoom_factor > 1:
             self.zoom_factor = zoom_factor
 
     def load(self, image_file):
         self.image_file = image_file
-        self.set_zoom_factor(1)
+        self.set_zoom_factor(100)
         self.redraw()
 
     def load_at_size(self, image_file, width, height):
@@ -354,27 +376,20 @@ class ImageViewer:
         self.redraw()
 
     def redraw(self):
-        filename = self.image_file.get_filename()
         dimensions = self.image_file.get_dimensions()
 
-        width = int(dimensions.get_width() * self.zoom_factor) 
-        height = int(dimensions.get_height() * self.zoom_factor) 
+        width = int((dimensions.get_width() * self.zoom_factor) / 100)
+        height = int((dimensions.get_height() * self.zoom_factor) / 100)
 
-        pixbuf = gtk.gdk.PixbufLoader()
-        pixbuf.set_size(width, height)
-        pixbuf.write(open(filename, "r").read())
-        pixbuf.close()
-        animation = pixbuf.get_animation()
-
-        if animation.is_static_image():
-            self.widget.set_from_pixbuf(animation.get_static_image())
+        if self.image_file.is_static_image():
+            self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
         else:
-            self.widget.set_from_animation(animation)
+            self.widget.set_from_animation(self.image_file.get_pixbuf_anim())
 
     def force_zoom(self, width, height):
         im_dim = self.image_file.get_dimensions()
-        zw = float(width) / im_dim.get_width()
-        zh = float(height) / im_dim.get_height()
+        zw = (float(width) / im_dim.get_width()) * 100
+        zh = (float(height) / im_dim.get_height()) * 100
         self.set_zoom_factor(min(zw, zh))
 
 class ViewerApp:
@@ -390,10 +405,11 @@ class ViewerApp:
 
         self.last_targets = []
         self.undo_queue = []
+        self.fullscreen = False
 
         self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
         self.window.set_border_width(5)
-        self.window.set_size_request(self.DEF_WIDTH, self.DEF_HEIGHT)
+        self.window.set_default_size(self.DEF_WIDTH, self.DEF_HEIGHT)
         self.window.connect("destroy", self.on_destroy)
         self.window.connect("key_press_event", self.on_key_press_event)
         self.window.set_position(gtk.WIN_POS_CENTER)
@@ -426,16 +442,18 @@ class ViewerApp:
         hbox.pack_start(ebox, False, False, 0)
         widget.show()
 
-        scrolled = gtk.ScrolledWindow()
-        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        scrolled.connect("scroll-event", self.on_viewer_scroll)
-        hbox.pack_start(scrolled, True, True, 0)
-        scrolled.show()
+        self.scrolled = gtk.ScrolledWindow()
+        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        self.scrolled.connect("scroll-event", self.on_viewer_scroll)
+        self.scrolled_size = None
+        self.scrolled.connect("size-allocate", self.on_viewer_size_allocate)
+        hbox.pack_start(self.scrolled, True, True, 0)
+        self.scrolled.show()
         #color = gtk.gdk.color_parse("#000000")
         #self.window.modify_bg(gtk.STATE_NORMAL, color)
-        self.image_viewer = ImageViewer()#self.on_viewer_resize) # XXX
+        self.image_viewer = ImageViewer() 
         widget = self.image_viewer.get_widget()
-        scrolled.add_with_viewport(widget)
+        self.scrolled.add_with_viewport(widget)
         widget.show()
 
         self.th_right = ImageViewer()
@@ -489,9 +507,8 @@ class ViewerApp:
         elif key_name in string.letters:
             self.show_selector(key_name)        
 
-    def on_viewer_resize(self, widget, allocation, data=None):
-        self.image_viewer.zoom_at_size(allocation.x - allocation.width, 
-                                       allocation.height - allocation.y)
+    def on_viewer_size_allocate(self, widget, event, data=None):
+        self.fit_viewer()
         self.refresh_info()
 
     def on_th_prev_press(self, widget, event, data=None):
@@ -550,9 +567,18 @@ class ViewerApp:
     ## Internal helpers
     def reload_viewer(self):
         self.image_viewer.load(self.file_manager.get_current_file())
+        self.fit_viewer(force=True)
         self.th_left.load_at_size(self.file_manager.get_prev_file(), self.TH_SIZE, self.TH_SIZE)
         self.th_right.load_at_size(self.file_manager.get_next_file(), self.TH_SIZE, self.TH_SIZE)
         self.refresh_info()
+
+    def fit_viewer(self, force=False):
+        allocation = self.scrolled.allocation
+        width, height = allocation.width, allocation.height
+        # Only redraw if size changed:
+        if (width, height) != self.scrolled_size or force:
+            self.image_viewer.zoom_at_size(width, height)
+            self.scrolled_size = (width, height)
 
     def refresh_info(self):
         self.refresh_title()
@@ -567,14 +593,16 @@ class ViewerApp:
 
         file_info = "%s pixels  %s  %d%%" % (image_file.get_dimensions(),
                                              image_file.get_filesize(), 
-                                             self.image_viewer.get_zoom_factor() * 100)
+                                             self.image_viewer.get_zoom_factor())
         file_index = "%d/%d" % (self.file_manager.get_current_index() + 1, 
                                 self.file_manager.get_list_length())
-        additional_info = ''
+
+        rss, vsize = get_process_memory_usage()
+        additional_info = "RSS: %s VSize: %s" % (Size(rss), Size(vsize))
 
         if self.last_targets:
             last = self.last_targets[0].replace(self.target_dir, '')
-            additional_info = " (press '.' to repeat '%s')" % last
+            additional_info += " (press '.' to repeat '%s')" % last
 
         self.file_info.set_text(file_info)
         self.additional_info.set_text(additional_info)
@@ -587,6 +615,7 @@ class ViewerApp:
             ## Generic actions:
             "Escape"      : self.quit_app,
             "F1"          : self.show_help,
+            "F11"         : self.toggle_fullscreen,
 
             ## Files navigation:
             "Home"        : self.first_image,
@@ -623,6 +652,14 @@ class ViewerApp:
     def show_help(self):
         helpd = HelpDialog(self.window, self.get_key_bindings())
         helpd.show()
+
+    def toggle_fullscreen(self):
+        if not self.fullscreen:
+            self.window.fullscreen()
+            self.fullscreen = True
+        else:
+            self.window.unfullscreen()
+            self.fullscreen = False
 
     def first_image(self):
         self.file_manager.go_first()
@@ -677,11 +714,12 @@ class ViewerApp:
             self.file_manager.delete_current()
 
     def zoom_100(self):
-        self.image_viewer.zoom_at(1)
+        self.image_viewer.zoom_at(100)
         self.refresh_info()
 
     def zoom_fit(self):
-        self.reload_viewer()
+        self.fit_viewer(force=True)
+        self.refresh_info()
 
     def zoom_in(self):
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.20)
