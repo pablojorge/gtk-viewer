@@ -19,8 +19,7 @@ import optparse
 #
 #  Funcionalidad:
 #
-#  * seleccionar nuevo file/dir 'o' (no anda el thumbnail)
-#
+#  * rename dialog como un save dialog
 #  * hacer un menu y un toolbox
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
 #    los bindings, con un get que devuleve bindings de acuerdo al modo)
@@ -191,6 +190,9 @@ class FileManager:
     def get_list_length(self):
         return len(self.filelist)
 
+    def empty(self):
+        return not self.filelist
+
     def go_first(self):
         self.index = 0
         self.on_list_modified()
@@ -294,7 +296,7 @@ class FileManager:
             self.on_list_empty()
         else:
             if self.index >= len(self.filelist):
-                self.index = len(self.filelist) - 1
+                self.index = self.index - len(self.filelist)
             self.on_list_modified()
 
 class SelectorDialog:
@@ -308,9 +310,10 @@ class SelectorDialog:
                                                       gtk.STOCK_OPEN,
                                                       gtk.RESPONSE_OK))
 
-        self.chooser.set_current_folder(initial_dir)
+        if initial_dir:
+            self.chooser.set_current_folder(initial_dir)
 
-        self.th_viewer = ThumbnailViewer(200)
+        self.th_viewer = ThumbnailViewer(300)
         widget = self.th_viewer.get_widget()
 
         ebox = gtk.EventBox()
@@ -322,7 +325,7 @@ class SelectorDialog:
         self.chooser.set_preview_widget_active(True)
         self.chooser.connect("selection-changed", self.on_selection_changed)
 
-        for target in last_targets:
+        for target in sorted(last_targets):
             self.chooser.add_shortcut_folder(target) 
 
     def on_selection_changed(self, chooser):
@@ -371,9 +374,10 @@ class OpenDialog:
                                                       gtk.STOCK_OPEN,
                                                       gtk.RESPONSE_OK))
 
-        self.chooser.set_current_folder(initial_dir)
+        if initial_dir:
+            self.chooser.set_current_folder(initial_dir)
 
-        self.th_viewer = ThumbnailViewer(200)
+        self.th_viewer = ThumbnailViewer(300)
         widget = self.th_viewer.get_widget()
 
         self.chooser.set_preview_widget(widget)
@@ -381,14 +385,8 @@ class OpenDialog:
         self.chooser.connect("selection-changed", self.on_selection_changed)
 
         img_filter = gtk.FileFilter()
-
-        # XXX unica lista
         img_filter.set_name("Images")
-        img_filter.add_pattern("*.png")
-        img_filter.add_pattern("*.jpg")
-        img_filter.add_pattern("*.jpeg")
-        img_filter.add_pattern("*.gif")
-
+        img_filter.add_pixbuf_formats()
         self.chooser.add_filter(img_filter)
 
     def on_selection_changed(self, chooser):
@@ -396,6 +394,7 @@ class OpenDialog:
         if filename:
             if os.path.isfile(filename):
                 self.th_viewer.load(ImageFile(filename))
+                self.th_viewer.show()
             else:
                 self.th_viewer.hide()
         else:
@@ -618,15 +617,21 @@ class ViewerApp:
     TH_SIZE = 200
     BG_COLOR = "#000000"
 
-    def __init__(self):
+    def __init__(self, files, start_file):
+        ### Data definition
         self.file_manager = FileManager(self.on_list_empty,
                                         self.on_list_modified,
                                         self.on_duplicated_file)
 
+        self.files_order = None
+        self.base_dir = None
+        self.last_opened_file = None
         self.last_targets = []
         self.undo_queue = []
+
         self.fullscreen = False
 
+        ### Window composition
         factory = WidgetFactory()
 
         self.window = factory.get_window(width=self.DEF_WIDTH, 
@@ -694,8 +699,20 @@ class ViewerApp:
         self.status_bar.pack_end(self.file_index, False, False, 10)
         self.status_bar.pack_end(self.additional_info, False, False, 10)
 
+        if files:
+            self.set_files(files, start_file)
+        else:
+            open_dialog = OpenDialog(initial_dir=".", 
+                                     callback=self.on_file_selected)
+            open_dialog.run()
+
+        self.window.show_all()
+
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)
+
+        self.files_order = None
+        self.undo_queue = []
 
         if start_file:
             self.file_manager.go_file(start_file)
@@ -746,7 +763,12 @@ class ViewerApp:
     def on_target_selected(self, target):
         self.move_current(target)
 
+    def on_base_dir_selected(self, base_dir):
+        self.base_dir = base_dir
+        self.refresh_info()
+
     def on_file_selected(self, filename):
+        self.last_opened_file = filename
         files, start_file = get_files_from_args([filename])
         self.set_files(files, start_file)
 
@@ -762,18 +784,26 @@ class ViewerApp:
         new_file = ImageFile(os.path.join(target_dir, target_name))
 
         if current.get_sha1() == new_file.get_sha1():
-            ErrorDialog(self.window, "'%s' already exists in '%s' and it's identical to '%s'" \
-                                    % (target_name, target_dir, current.get_filename())).run()
-            return
+            ErrorDialog(self.window, "Identical file '%s' found in '%s'. Deleting to avoid duplicates" \
+                                    % (target_name, target_dir)).run()
+            self.file_manager.delete_current()
         else:
             candidate = self.file_manager.get_safe_candidate(target_dir)
-            InfoDialog(self.window, "'%s' already exists in '%s', auto-renaming to '%s'" \
+            InfoDialog(self.window, "There's already a file named '%s' in '%s', auto-renaming to '%s'" \
                                     % (target_name, target_dir, candidate)).run()
             self.move_current(target_dir, candidate)
 
     def on_list_empty(self):
-        InfoDialog(self.window, "No more files, exiting").run()
-        self.quit_app()
+        if QuestionDialog(self.window, "No more files, select new one?").run():
+            initial_dir = None
+            if self.last_opened_file:
+                initial_dir = os.path.dirname(self.last_opened_file)
+            open_dialog = OpenDialog(initial_dir=initial_dir, 
+                                     callback=self.on_file_selected)
+            open_dialog.run()
+        else:
+            InfoDialog(self.window, "No more files, exiting").run()
+            self.quit_app()
 
     def on_list_modified(self):
         self.reload_viewer()
@@ -781,14 +811,14 @@ class ViewerApp:
 
     ## Internal helpers
     def move_current(self, target_dir, target_name=''):
+        if target_dir in self.last_targets:
+            self.last_targets.remove(target_dir)
+
+        self.last_targets.insert(0, target_dir)
+
         undo_action = self.file_manager.move_current(target_dir, target_name)
 
         if undo_action:
-            if target_dir in self.last_targets:
-                self.last_targets.remove(target_dir)
-
-            self.last_targets.insert(0, target_dir)
-
             self.undo_queue.append(undo_action)
 
     def reload_viewer(self):
@@ -818,28 +848,35 @@ class ViewerApp:
     def refresh_status(self):
         image_file = self.file_manager.get_current_file()
 
-        self.file_info.set_text("%s | %s pixels | %s | %d%%" % \
+        self.file_info.set_text("%s\n%s pixels | %s | %d%%" % \
                                 (image_file.get_mtime(),
                                  image_file.get_dimensions(),
                                  image_file.get_filesize(), 
                                  self.image_viewer.get_zoom_factor()))
+        self.file_info.set_justify(gtk.JUSTIFY_CENTER)
 
         rss, vsize = get_process_memory_usage()
-        self.memory_info.set_text("(RSS: %s VSize: %s)" % (Size(rss), Size(vsize)))
+        self.memory_info.set_markup("<i>RSS: %s\nVSize: %s</i>" % (Size(rss), Size(vsize)))
+
+        additional = "Base: %s" % self.base_dir
 
         if self.last_targets:
-            last = self.last_targets[0]
-            self.additional_info.set_text("[press 'r' or '.' to repeat '%s']" % last)
+            additional += "\nLast: %s" % self.last_targets[0]
 
-        self.file_index.set_text("%d/%d" % \
-                                 (self.file_manager.get_current_index() + 1, 
-                                  self.file_manager.get_list_length()))
+        self.additional_info.set_markup("%s" % additional)
+
+        self.file_index.set_markup("<b>%d/%d</b>\n<i>Order: %s</i>" % \
+                                   (self.file_manager.get_current_index() + 1, 
+                                    self.file_manager.get_list_length(),
+                                    self.files_order))
+        self.file_index.set_justify(gtk.JUSTIFY_RIGHT)
     ##
 
     ## Key Bindings
     def get_key_bindings(self):
         return {
             ## Generic actions:
+            "q"           : self.quit_app,
             "Escape"      : self.quit_app,
             "F1"          : self.show_help,
             "F11"         : self.toggle_fullscreen,
@@ -861,6 +898,7 @@ class ViewerApp:
             "Tab"         : self.show_selector,
             "o"           : self.open_file,
             "F2"          : self.rename_current,
+            "F3"          : self.select_base_dir,
             "r"           : self.repeat_selection,
             "period"      : self.repeat_selection,
             "z"           : self.undo_last,
@@ -920,14 +958,14 @@ class ViewerApp:
         self.file_manager.go_backward(1)
 
     def show_selector(self):
-        if self.last_targets:
-            initial_dir = self.last_targets[0]
+        if self.base_dir:
+            initial_dir = self.base_dir
         else:
             initial_dir = self.file_manager.get_current_file().get_dirname()
 
-        selector = SelectorDialog(initial_dir, 
-                                  self.last_targets, 
-                                  self.on_target_selected)
+        selector = SelectorDialog(initial_dir=initial_dir, 
+                                  last_targets=self.last_targets, 
+                                  callback=self.on_target_selected)
         selector.run()
 
     def open_file(self):
@@ -939,6 +977,13 @@ class ViewerApp:
         basename = self.file_manager.get_current_file().get_basename()
         renamer = RenameDialog(self.window, basename, self.on_new_name_selected)
         renamer.show()
+
+    def select_base_dir(self):
+        initial_dir = self.file_manager.get_current_file().get_dirname()
+        selector = SelectorDialog(initial_dir=initial_dir, 
+                                  last_targets=[], 
+                                  callback=self.on_base_dir_selected)
+        selector.run()
 
     def repeat_selection(self):
         if not self.last_targets:
@@ -962,15 +1007,19 @@ class ViewerApp:
             self.file_manager.delete_current()
 
     def sort_by_date_asc(self):
+        self.files_order = "Date Asc"
         self.file_manager.sort_by_date(reverse=False)
 
     def sort_by_date_desc(self):
+        self.files_order = "Date Desc"
         self.file_manager.sort_by_date(reverse=True)
 
     def sort_by_name_asc(self):
+        self.files_order = "Name Asc"
         self.file_manager.sort_by_name(reverse=False)
 
     def sort_by_name_desc(self):
+        self.files_order = "Name Desc"
         self.file_manager.sort_by_name(reverse=True)
 
     def zoom_100(self):
@@ -991,15 +1040,13 @@ class ViewerApp:
     ##
 
     def run(self):
-        self.window.show_all()
         gtk.main()
 
 def has_known_file_ext(filename):
-    known_file_ext = ["jpg", "jpeg", "png", "gif"]
-
-    for file_ext in known_file_ext:
-        if ("." + file_ext) in filename.lower():
-            return True
+    for format_ in gtk.gdk.pixbuf_get_formats():
+        for extension in format_["extensions"]:
+            if ("." + extension) in filename.lower():
+                return True
 
     return False
 
@@ -1046,15 +1093,9 @@ def main():
 
     options, args = parser.parse_args()
 
-    if not args:
-        print "No files given!\n"
-        parser.print_help()
-        return
-
     files, start_file = get_files_from_args(args)
 
-    app = ViewerApp()
-    app.set_files(files, start_file)
+    app = ViewerApp(files, start_file)
     app.run()
 
 if __name__ == "__main__":
