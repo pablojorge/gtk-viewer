@@ -9,7 +9,7 @@ pygtk.require('2.0')
 import gtk
 import gio
 
-import sha
+import hashlib
 import time
 import glob
 import shutil
@@ -19,16 +19,17 @@ import optparse
 #
 #  Funcionalidad:
 #
+#  * drag para mover la imagen
+#  * hacer zoom in y out con mouse manteniendo el centro
+#
+#  * poder "starrear" imagenes
 #  * rename dialog como un save dialog
+#  * soporte para copiar ademas de mover
 #  * hacer un menu y un toolbox
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
 #    los bindings, con un get que devuleve bindings de acuerdo al modo)
 #  * hacer un help
-#  * hacer zoom in y out con mouse manteniendo el centro
-#  * drag para mover la imagen
-#  * si imagen no entra, arrows para moverse
-#
-#  * no poder pasarse del inicio y del final?
+#  * soporte para rotacion
 #
 #  Performance:
 #
@@ -107,7 +108,7 @@ class File:
 
     def get_sha1(self):
         with open(self.filename, "r") as input_:
-            return sha.sha(input_.read()).hexdigest()
+            return hashlib.sha1(input_.read()).hexdigest()
 
     def get_atime(self):
         return Datetime(os.stat(self.filename).st_atime)
@@ -131,6 +132,28 @@ class File:
     def trash(self):
         gfile = gio.File(path=self.filename)
         gfile.trash()
+
+    def untrash(self):
+        trash_dir = os.getenv("HOME") + "/.local/share/Trash"
+        info_dir = trash_dir + "/info"
+        files_dir = trash_dir + "/files"
+        
+        info_files = glob.glob(info_dir + "/*")
+        
+        for info_file in info_files:
+            with open(info_file, "r") as info:
+                lines = info.readlines()
+            for line in lines:
+                if line.startswith("Path="):
+                    path = line[line.index("=")+1:-1]
+                    if path == os.path.abspath(self.filename):
+                        trashed_file = info_file.replace(info_dir, files_dir)
+                        trashed_file = trashed_file.replace(".trashinfo", "")
+                        os.unlink(info_file)
+                        shutil.move(trashed_file, self.filename)
+                        return
+        
+        raise Exception("Couldn't find '%s' in trash" % self.filename)
 
 class ImageFile(File):
     def __init__(self, filename):
@@ -164,13 +187,12 @@ class ImageFile(File):
         return self.dimensions
 
 class FileManager:
-    def __init__(self, on_list_empty, on_list_modified, on_duplicated_file):
+    def __init__(self, on_list_empty, on_list_modified):
         self.filelist = []
         self.index = 0
 
         self.on_list_empty = on_list_empty
         self.on_list_modified = on_list_modified
-        self.on_duplicated_file = on_duplicated_file
 
     def set_files(self, filelist):
         self.filelist = map(ImageFile, filelist)
@@ -243,7 +265,8 @@ class FileManager:
             self.index = orig_index # XXX podria no existir mas
             self.on_list_modified()
 
-        return undo_action
+        return ("'%s' renamed to '%s'" % (orig_name, current.get_basename()),
+                undo_action)
 
     def move_current(self, target_dir, target_name=''):
         current = self.get_current_file()
@@ -256,8 +279,7 @@ class FileManager:
         new_filename = os.path.join(target_dir, target_name)
 
         if os.path.isfile(new_filename):
-            self.on_duplicated_file(target_dir, target_name)
-            return
+            return self.handle_duplicate(target_dir, target_name)
 
         current.rename(new_filename)
         self.on_current_eliminated()
@@ -269,12 +291,28 @@ class FileManager:
             self.index = orig_index # XXX podria ser out of bounds
             self.on_list_modified()
 
-        return undo_action
+        return ("'%s' moved to '%s'" % (orig_filename, target_dir),
+                undo_action)
 
     def delete_current(self):
-        self.get_current_file().trash()
+        current = self.get_current_file()
+        orig_index = self.get_current_index()
+        orig_filename = current.get_filename()
+
+        current.trash()
         self.on_current_eliminated()
 
+        def undo_action():
+            restored = ImageFile(orig_filename)
+            restored.untrash()
+            self.filelist.insert(orig_index, restored)
+            self.index = orig_index # XXX podria ser out of bounds
+            self.on_list_modified()
+
+        return ("'%s' deleted" % (orig_filename),
+                undo_action)
+
+    # Internal helpers:
     def get_safe_candidate(self, target):
         filename = self.get_current_file().get_filename()
         candidate = os.path.basename(filename)
@@ -288,7 +326,21 @@ class FileManager:
 
         return candidate
 
-    # Internal helpers:
+    def handle_duplicate(self, target_dir, target_name):
+        current = self.get_current_file()
+        orig_filename = current.get_filename()
+        new_file = ImageFile(os.path.join(target_dir, target_name))
+
+        if current.get_sha1() == new_file.get_sha1():
+            _, undo_action = self.delete_current()
+            return ("'%s' deleted to avoid duplicates" % orig_filename,
+                    undo_action)
+        else:
+            candidate = self.get_safe_candidate(target_dir)
+            _, undo_action = self.move_current(target_dir, candidate)
+            return ("'%s' auto-renamed to '%s' in '%s'" % (orig_filename, candidate, target_dir),
+                    undo_action)
+
     def on_current_eliminated(self):
         del self.filelist[self.index]
 
@@ -334,8 +386,7 @@ class SelectorDialog:
             files = get_files_from_dir(dirname)
             if files:
                 self.file_manager = FileManager(on_list_empty=lambda: None, 
-                                                on_list_modified=lambda: None,
-                                                on_duplicated_file=lambda a,b: None)
+                                                on_list_modified=lambda: None)
                 self.file_manager.set_files(files)
                 self.th_viewer.load(self.file_manager.get_current_file())
                 self.th_viewer.show()
@@ -620,14 +671,13 @@ class ViewerApp:
     def __init__(self, files, start_file):
         ### Data definition
         self.file_manager = FileManager(self.on_list_empty,
-                                        self.on_list_modified,
-                                        self.on_duplicated_file)
+                                        self.on_list_modified)
 
         self.files_order = None
         self.base_dir = None
         self.last_opened_file = None
         self.last_targets = []
-        self.undo_queue = []
+        self.undo_stack = []
 
         self.fullscreen = False
 
@@ -695,9 +745,9 @@ class ViewerApp:
 
         self.status_bar.pack_start(self.file_info, False, False, 10)
         self.status_bar.pack_start(self.memory_info, False, False, 10)
+        self.status_bar.pack_start(self.additional_info, False, False, 10)
 
         self.status_bar.pack_end(self.file_index, False, False, 10)
-        self.status_bar.pack_end(self.additional_info, False, False, 10)
 
         if files:
             self.set_files(files, start_file)
@@ -712,7 +762,7 @@ class ViewerApp:
         self.file_manager.set_files(files)
 
         self.files_order = None
-        self.undo_queue = []
+        self.undo_stack = []
 
         if start_file:
             self.file_manager.go_file(start_file)
@@ -777,21 +827,7 @@ class ViewerApp:
             InfoDialog(self.window, "'%s' already exists!" % new_name).run()
             return
 
-        self.undo_queue.append(self.file_manager.rename_current(new_name))
-
-    def on_duplicated_file(self, target_dir, target_name):
-        current = self.file_manager.get_current_file()
-        new_file = ImageFile(os.path.join(target_dir, target_name))
-
-        if current.get_sha1() == new_file.get_sha1():
-            ErrorDialog(self.window, "Identical file '%s' found in '%s'. Deleting to avoid duplicates" \
-                                    % (target_name, target_dir)).run()
-            self.file_manager.delete_current()
-        else:
-            candidate = self.file_manager.get_safe_candidate(target_dir)
-            InfoDialog(self.window, "There's already a file named '%s' in '%s', auto-renaming to '%s'" \
-                                    % (target_name, target_dir, candidate)).run()
-            self.move_current(target_dir, candidate)
+        self.undo_stack.append(self.file_manager.rename_current(new_name))
 
     def on_list_empty(self):
         if QuestionDialog(self.window, "No more files, select new one?").run():
@@ -810,16 +846,13 @@ class ViewerApp:
     ## 
 
     ## Internal helpers
-    def move_current(self, target_dir, target_name=''):
+    def move_current(self, target_dir):
         if target_dir in self.last_targets:
             self.last_targets.remove(target_dir)
 
         self.last_targets.insert(0, target_dir)
 
-        undo_action = self.file_manager.move_current(target_dir, target_name)
-
-        if undo_action:
-            self.undo_queue.append(undo_action)
+        self.undo_stack.append(self.file_manager.move_current(target_dir))
 
     def reload_viewer(self):
         self.image_viewer.load(self.file_manager.get_current_file())
@@ -848,24 +881,31 @@ class ViewerApp:
     def refresh_status(self):
         image_file = self.file_manager.get_current_file()
 
-        self.file_info.set_text("%s\n%s pixels | %s | %d%%" % \
-                                (image_file.get_mtime(),
-                                 image_file.get_dimensions(),
-                                 image_file.get_filesize(), 
-                                 self.image_viewer.get_zoom_factor()))
-        self.file_info.set_justify(gtk.JUSTIFY_CENTER)
+        # Markup reference:
+        # http://www.gtk.org/api/2.6/pango/PangoMarkupFormat.html
+
+        self.file_info.set_markup("<i>Date:</i> %s\n<i>Size:</i> %s pixels | %s | %d%%\n<i>SHA1:</i> %s" % \
+                                  (image_file.get_mtime(),
+                                   image_file.get_dimensions(),
+                                   image_file.get_filesize(), 
+                                   self.image_viewer.get_zoom_factor(),
+                                   image_file.get_sha1()))
 
         rss, vsize = get_process_memory_usage()
-        self.memory_info.set_markup("<i>RSS: %s\nVSize: %s</i>" % (Size(rss), Size(vsize)))
+        self.memory_info.set_markup("<i>RSS:</i> %s\n<i>VSize:</i> %s" % (Size(rss), Size(vsize)))
 
-        additional = "Base: %s" % self.base_dir
+        additional = "<i>Base directory:</i> <b>%s</b>" % self.base_dir
 
         if self.last_targets:
-            additional += "\nLast: %s" % self.last_targets[0]
+            additional += "\n<i>Last directory:</i> <b>%s</b>" % self.last_targets[0]
+
+        if self.undo_stack:
+            desc, _ = self.undo_stack[-1]
+            additional += "\n<i>Last action:</i> <span background='yellow'>%s</span>" % desc
 
         self.additional_info.set_markup("%s" % additional)
 
-        self.file_index.set_markup("<b>%d/%d</b>\n<i>Order: %s</i>" % \
+        self.file_index.set_markup("<b><big>%d/%d</big></b>\n<i>Order:</i> %s" % \
                                    (self.file_manager.get_current_index() + 1, 
                                     self.file_manager.get_list_length(),
                                     self.files_order))
@@ -993,18 +1033,15 @@ class ViewerApp:
         self.move_current(self.last_targets[0])
 
     def undo_last(self):
-        if not self.undo_queue:
+        if not self.undo_stack:
             InfoDialog(self.window, "Nothing to undo!").run()
             return
 
-        undo_action = self.undo_queue.pop()
+        _, undo_action = self.undo_stack.pop()
         undo_action()
 
     def delete_image(self):
-        basename = self.file_manager.get_current_file().get_basename()
-
-        if QuestionDialog(self.window, "Send '%s' to the trash?" % basename).run():
-            self.file_manager.delete_current()
+        self.undo_stack.append(self.file_manager.delete_current())
 
     def sort_by_date_asc(self):
         self.files_order = "Date Asc"
