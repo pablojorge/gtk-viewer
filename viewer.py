@@ -629,13 +629,19 @@ class ThumbnailViewer(ImageViewer):
             self.hide()
 
 class AutoScrolledWindow:
-    def __init__(self, child, bg_color, on_scroll_event, on_size_allocate):
+    def __init__(self, child, bg_color, on_special_drag_left, 
+                                        on_special_drag_right, 
+                                        on_scroll_event, 
+                                        on_size_allocate):
         self.scrolled = gtk.ScrolledWindow()
         self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         self.scrolled.connect("size-allocate", on_size_allocate)
 
         self.scrolled.add_with_viewport(child)
         viewport = child.get_parent()
+
+        self.on_special_drag_left = on_special_drag_left
+        self.on_special_drag_right = on_special_drag_right
 
         viewport.connect("scroll-event", self.on_scroll_event, on_scroll_event)
         viewport.connect("button-press-event", self.on_button_press_event)
@@ -657,12 +663,19 @@ class AutoScrolledWindow:
     def on_button_press_event(self, widget, event):
         if event.button == 1: # left
             widget.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.FLEUR))
-            self.prev_x = event.x_root
-            self.prev_y = event.y_root
+
+        self.prev_x = event.x_root
+        self.prev_y = event.y_root
 
     def on_button_release_event(self, widget, event):
         if event.button == 1:
             widget.window.set_cursor(None)
+        elif event.button == 3:
+            offset = self.prev_x - event.x_root
+            if offset < 0:
+                self.on_special_drag_left()
+            elif offset >= 0:
+                self.on_special_drag_right()
 
     def on_motion_notify_event(self, widget, event):
         if not event.state & gtk.gdk.BUTTON1_MASK:
@@ -799,6 +812,8 @@ class ViewerApp:
         self.scrolled_size = None
         self.scrolled = AutoScrolledWindow(child=self.image_viewer.get_widget(),
                                            bg_color=self.BG_COLOR,
+                                           on_special_drag_left=self.on_viewer_drag_left,
+                                           on_special_drag_right=self.on_viewer_drag_right,
                                            on_scroll_event=self.on_viewer_scroll,
                                            on_size_allocate=self.on_viewer_size_allocate)
         hbox.pack_start(self.scrolled.get_widget(), True, True, 0)
@@ -881,6 +896,10 @@ class ViewerApp:
             self.prev_image()
         else:
             self.next_image()
+
+    # not real gtk events:
+    def on_viewer_drag_left(self): self.prev_image()
+    def on_viewer_drag_right(self): self.next_image()
 
     def on_viewer_scroll(self, widget, event, data=None):
         if event.direction == gtk.gdk.SCROLL_UP:
