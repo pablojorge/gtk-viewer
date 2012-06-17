@@ -26,7 +26,6 @@ import optparse
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
 #    los bindings, con un get que devuleve bindings de acuerdo al modo)
 #  * hacer un help
-#  * soporte para rotacion
 #
 #  Performance:
 #
@@ -157,6 +156,9 @@ class ImageFile(File):
         File.__init__(self, filename)
         self.dimensions = None
         self.pixbuf = None
+        self.rotation = 0
+        self.flip_h = False
+        self.flip_v = False
 
     def get_pixbuf(self):
         if not self.pixbuf:
@@ -174,8 +176,28 @@ class ImageFile(File):
         loader.close()
         return loader.get_animation()
 
+    def toggle_flip(self, horizontal):
+        if horizontal:
+            self.flip_h = not self.flip_h
+        else:
+            self.flip_v = not self.flip_v
+
+    def rotate(self, angle):
+        self.rotation = (self.rotation + angle) % 360
+
     def get_pixbuf_at_size(self, width, height):
-        return self.get_pixbuf().scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+        angle_constants = {0: gtk.gdk.PIXBUF_ROTATE_NONE,
+                           90: gtk.gdk.PIXBUF_ROTATE_CLOCKWISE,
+                           180: gtk.gdk.PIXBUF_ROTATE_UPSIDEDOWN,
+                           270: gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE}
+    
+        pixbuf = self.get_pixbuf()
+        scaled = pixbuf.scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+        flipped = scaled.flip(True) if self.flip_h else scaled
+        flipped = flipped.flip(False) if self.flip_v else flipped
+        rotated = flipped.rotate_simple(angle_constants[self.rotation])
+
+        return rotated
 
     def get_dimensions(self):
         if not self.dimensions:
@@ -569,6 +591,22 @@ class ImageViewer:
 
     def zoom_at(self, zoom_factor):
         self.set_zoom_factor(zoom_factor)
+        self.redraw()
+
+    def flip_horizontal(self):
+        self.image_file.toggle_flip(True)
+        self.redraw()
+
+    def flip_vertical(self):
+        self.image_file.toggle_flip(False)
+        self.redraw()
+
+    def rotate_c(self):
+        self.image_file.rotate(+90)
+        self.redraw()
+
+    def rotate_cc(self):
+        self.image_file.rotate(-90)
         self.redraw()
 
     def get_scaled_size(self):
@@ -1047,7 +1085,6 @@ class ViewerApp:
             "o"           : self.open_file,
             "F2"          : self.rename_current,
             "F3"          : self.select_base_dir,
-            "r"           : self.repeat_selection,
             "period"      : self.repeat_selection,
             "z"           : self.undo_last,
             "Delete"      : self.delete_image,
@@ -1056,9 +1093,13 @@ class ViewerApp:
             "n"           : self.sort_by_name_asc,
             "N"           : self.sort_by_name_desc,
 
-            ## Zoom:
+            ## Image manipulation:
             "1"           : self.zoom_100,
             "0"           : self.zoom_fit,
+            "r"           : self.rotate_c,
+            "R"           : self.rotate_cc,
+            "f"           : self.flip_horizontal,
+            "F"           : self.flip_vertical,
         }
 
     ## action handlers
@@ -1170,6 +1211,19 @@ class ViewerApp:
     def zoom_fit(self):
         self.fit_viewer(force=True)
         self.refresh_info()
+
+    def rotate_c(self):
+        self.image_viewer.rotate_c()
+
+    def rotate_cc(self):
+        self.image_viewer.rotate_cc()
+
+    def flip_horizontal(self):
+        self.image_viewer.flip_horizontal()
+
+    def flip_vertical(self):
+        self.image_viewer.flip_vertical()
+
     ##
 
     def run(self):
