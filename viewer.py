@@ -19,10 +19,7 @@ import optparse
 #
 #  Funcionalidad:
 #
-#  * drag para mover la imagen
-#  * hacer zoom in y out con mouse manteniendo el centro
-#
-#  * poder "starrear" imagenes
+#  * poder "starrear" imagenes, filtrar starred
 #  * rename dialog como un save dialog
 #  * soporte para copiar ademas de mover
 #  * hacer un menu y un toolbox
@@ -574,11 +571,16 @@ class ImageViewer:
         self.set_zoom_factor(zoom_factor)
         self.redraw()
 
-    def redraw(self):
+    def get_scaled_size(self):
         dimensions = self.image_file.get_dimensions()
 
         width = int((dimensions.get_width() * self.zoom_factor) / 100)
         height = int((dimensions.get_height() * self.zoom_factor) / 100)
+
+        return width, height
+
+    def redraw(self):
+        width, height = self.get_scaled_size()
 
         if self.image_file.is_static_image():
             self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
@@ -626,6 +628,99 @@ class ThumbnailViewer(ImageViewer):
         else:
             self.hide()
 
+class AutoScrolledWindow:
+    def __init__(self, child, bg_color, on_scroll_event, on_size_allocate):
+        self.scrolled = gtk.ScrolledWindow()
+        self.scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        self.scrolled.connect("size-allocate", on_size_allocate)
+
+        self.scrolled.add_with_viewport(child)
+        viewport = child.get_parent()
+
+        viewport.connect("scroll-event", self.on_scroll_event, on_scroll_event)
+        viewport.connect("button-press-event", self.on_button_press_event)
+        viewport.connect("button-release-event", self.on_button_release_event)
+        viewport.connect("motion-notify-event", self.on_motion_notify_event)
+
+        viewport.set_events(gtk.gdk.EXPOSURE_MASK | 
+                            gtk.gdk.LEAVE_NOTIFY_MASK | 
+                            gtk.gdk.BUTTON_PRESS_MASK | 
+                            gtk.gdk.BUTTON_RELEASE_MASK | 
+                            gtk.gdk.POINTER_MOTION_MASK | 
+                            gtk.gdk.POINTER_MOTION_HINT_MASK)
+
+        viewport.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
+
+    def get_widget(self):
+        return self.scrolled
+
+    def on_button_press_event(self, widget, event):
+        if event.button == 1: # left
+            widget.window.set_cursor(gtk.gdk.Cursor(gtk.gdk.FLEUR))
+            self.prev_x = event.x_root
+            self.prev_y = event.y_root
+
+    def on_button_release_event(self, widget, event):
+        if event.button == 1:
+            widget.window.set_cursor(None)
+
+    def on_motion_notify_event(self, widget, event):
+        if not event.state & gtk.gdk.BUTTON1_MASK:
+            return
+
+        offset_x = self.prev_x - event.x_root
+        offset_y = self.prev_y - event.y_root
+
+        self.prev_x = event.x_root
+        self.prev_y = event.y_root
+
+        x_adj = widget.get_hadjustment()
+        y_adj = widget.get_vadjustment() 
+
+        new_x = x_adj.get_value() + offset_x
+        new_y = y_adj.get_value() + offset_y
+
+        if (new_x >= x_adj.get_lower() and 
+            new_x <= (x_adj.get_upper() - x_adj.get_page_size())):
+            x_adj.set_value(new_x)
+
+        if (new_y >= y_adj.get_lower() and 
+            new_y <= (y_adj.get_upper() - y_adj.get_page_size())):
+            y_adj.set_value(new_y)
+
+    def on_scroll_event(self, widget, event, callback):
+        # to prevent partial re-drawings:
+        widget.get_window().freeze_updates()
+
+        # get full img size before and after zoom:
+        old_size, new_size = callback(widget, event)
+
+        # calculate the offset off the pointer inside the viewport:
+        win_root = widget.get_window().get_origin()
+        event_root = event.get_root_coords()
+
+        event_x = event_root[0] - win_root[0]
+        event_y = event_root[1] - win_root[1]
+
+        # calculate the proportional location of the pointer inside the img:
+        x_adj = widget.get_hadjustment()
+        y_adj = widget.get_vadjustment() 
+
+        px = (x_adj.get_value() + event_x) / old_size[0]
+        py = (y_adj.get_value() + event_y) / old_size[1]
+
+        # adjust the scrollbars to maintain the same position of the cursor:
+        new_x = px * new_size[0] - event_x
+        new_y = py * new_size[1] - event_y
+
+        x_adj.set_value(new_x)
+        y_adj.set_value(new_y)
+
+        # re-enable updates:
+        widget.get_window().thaw_updates()
+
+        return True # to prevent further processing
+
 class WidgetFactory:
     def __init__(self):
         pass
@@ -650,17 +745,6 @@ class WidgetFactory:
         ebox.add(child)
         ebox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
         return ebox
-
-    def get_scrolled(self, child, bg_color, on_scroll_event, on_size_allocate):
-        scrolled = gtk.ScrolledWindow()
-        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        scrolled.connect("scroll-event", on_scroll_event)
-        scrolled.connect("size-allocate", on_size_allocate)
-
-        scrolled.add_with_viewport(child)
-        child.get_parent().modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
-
-        return scrolled
 
 class ViewerApp:
     DEF_WIDTH = 640
@@ -713,11 +797,11 @@ class ViewerApp:
         # Main viewer
         self.image_viewer = ImageViewer() 
         self.scrolled_size = None
-        self.scrolled = factory.get_scrolled(child=self.image_viewer.get_widget(),
-                                             bg_color=self.BG_COLOR,
-                                             on_scroll_event=self.on_viewer_scroll,
-                                             on_size_allocate=self.on_viewer_size_allocate)
-        hbox.pack_start(self.scrolled, True, True, 0)
+        self.scrolled = AutoScrolledWindow(child=self.image_viewer.get_widget(),
+                                           bg_color=self.BG_COLOR,
+                                           on_scroll_event=self.on_viewer_scroll,
+                                           on_size_allocate=self.on_viewer_size_allocate)
+        hbox.pack_start(self.scrolled.get_widget(), True, True, 0)
 
         # Right thumbnail
         self.th_right = ThumbnailViewer(self.TH_SIZE)
@@ -804,9 +888,14 @@ class ViewerApp:
         else:
             factor = 0.95
 
+        old_size = self.image_viewer.get_scaled_size()
+
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
         self.refresh_info()
-        return True # to prevent further processing
+
+        new_size = self.image_viewer.get_scaled_size()
+
+        return old_size, new_size
     ##
 
     ## Internal callbacks
@@ -863,7 +952,7 @@ class ViewerApp:
         self.refresh_info()
 
     def fit_viewer(self, force=False):
-        allocation = self.scrolled.allocation
+        allocation = self.scrolled.get_widget().allocation
         width, height = allocation.width, allocation.height
         # Only redraw if size changed:
         if (width, height) != self.scrolled_size or force:
@@ -951,10 +1040,6 @@ class ViewerApp:
             ## Zoom:
             "1"           : self.zoom_100,
             "0"           : self.zoom_fit,
-            "KP_Add"      : self.zoom_in,
-            "plus"        : self.zoom_in,
-            "KP_Subtract" : self.zoom_out,
-            "minus"       : self.zoom_out,
         }
 
     ## action handlers
@@ -1065,14 +1150,6 @@ class ViewerApp:
 
     def zoom_fit(self):
         self.fit_viewer(force=True)
-        self.refresh_info()
-
-    def zoom_in(self):
-        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.20)
-        self.refresh_info()
-
-    def zoom_out(self):
-        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.80)
         self.refresh_info()
     ##
 
