@@ -965,6 +965,9 @@ class ViewerApp:
                                      callback=self.on_file_selected)
             open_dialog.run()
 
+            if self.file_manager.empty():
+                raise Exception("No files selected!")
+
         self.window.show_all()
 
     def set_files(self, files, start_file):
@@ -1359,8 +1362,11 @@ def main():
 
     files, start_file = get_files_from_args(args)
 
-    app = ViewerApp(files, start_file)
-    app.run()
+    try:
+        app = ViewerApp(files, start_file)
+        app.run()
+    except Exception, e:
+        print "Error:", e
 
 if __name__ == "__main__":
     main()
