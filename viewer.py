@@ -130,6 +130,7 @@ class File:
         gfile.trash()
 
     def untrash(self):
+        # XXX linux-only
         trash_dir = os.getenv("HOME") + "/.local/share/Trash"
         info_dir = trash_dir + "/info"
         files_dir = trash_dir + "/files"
@@ -329,6 +330,25 @@ class FileManager:
             self.on_list_modified()
 
         return ("'%s' deleted" % (orig_filename),
+                undo_action)
+
+    def toggle_star(self):
+        current = self.get_current_file()
+        orig_index = self.get_current_index()
+        orig_name = current.get_basename()
+        name, sep, ext = orig_name.rpartition(".")
+        star_marker = " (S)"
+        was_starred = name.endswith(star_marker)
+        new_name = name.replace(star_marker, "") if was_starred else name + star_marker
+        current.rename(os.path.join(current.get_dirname(), string.join((new_name, ext), sep)))
+        self.on_list_modified()
+
+        def undo_action():
+            current.rename(os.path.join(current.get_dirname(), orig_name))
+            self.index = orig_index # XXX podria no existir mas
+            self.on_list_modified()
+
+        return ("'%s' %s" % (orig_name, "unstarred" if was_starred else "starred"),
                 undo_action)
 
     # Internal helpers:
@@ -1087,6 +1107,7 @@ class ViewerApp:
             "F3"          : self.select_base_dir,
             "period"      : self.repeat_selection,
             "z"           : self.undo_last,
+            "s"           : self.toggle_star,
             "Delete"      : self.delete_image,
             "d"           : self.sort_by_date_asc,
             "D"           : self.sort_by_date_desc,
@@ -1185,6 +1206,9 @@ class ViewerApp:
         _, undo_action = self.undo_stack.pop()
         undo_action()
 
+    def toggle_star(self):
+        self.undo_stack.append(self.file_manager.toggle_star())
+
     def delete_image(self):
         self.undo_stack.append(self.file_manager.delete_current())
 
@@ -1267,6 +1291,7 @@ def get_files_from_args(args):
     return files, start_file
 
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
+    # XXX linux-only
     with open("/proc/%i/stat" % pid) as statfile:
         stat = statfile.read().split(' ')
 
