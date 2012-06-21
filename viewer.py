@@ -19,18 +19,12 @@ import optparse
 #
 #  Funcionalidad:
 #
-#  * poder "starrear" imagenes, filtrar starred
 #  * rename dialog como un save dialog
 #  * soporte para copiar ademas de mover
 #  * hacer un menu y un toolbox
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
 #    los bindings, con un get que devuleve bindings de acuerdo al modo)
 #  * hacer un help
-#
-#  Performance:
-#
-#  * hacer un cache limitado en lugar de cachear todo
-#  * tiempo de carga de los gifs animados (play/stop como workaround?)
 #
 #  Video:
 #
@@ -41,6 +35,83 @@ import optparse
 #  * http://stackoverflow.com/questions/6078368/how-to-embed-video-in-gtk-application-window-using-gstreamer-xoverlay
 #  * http://www.daa.com.au/pipermail/pygtk/2008-June/015332.html
 
+class cache:
+    def __init__(self, limit=None):
+        self.keys = []
+        self.limit = limit
+        self.store = {}
+        self.hits = 0
+        self.misses = 0
+
+    def __add_key(self, key):
+        if self.limit is None:
+            return
+
+        if len(self.keys) == self.limit:
+            older = self.keys[0]
+            del self.store[older]
+            del self.keys[0]
+
+        self.keys.append(key)
+
+    def __refresh_key(self, key):
+        if self.limit is None:
+            return
+
+        del self.keys[self.keys.index(key)]
+        self.keys.append(key)
+
+    def __setitem__(self, key, value):
+        self.__add_key(key)
+        self.store[key] = value
+
+    def __getitem__(self, key):
+        try:
+            value = self.store[key]
+            self.hits += 1
+            self.__refresh_key(key)
+            return value
+        except:
+            self.misses += 1
+            raise
+
+    def has(self, key):
+        return key in self.store
+
+def internally_cached(method):
+    def wrapper(self, *args, **kwargs):
+        key = (method.__name__,
+               args,
+               tuple(kwargs.items()))
+
+        if not hasattr(self, "__cache__"):
+            self.__cache__ = cache()
+    
+        try:
+            return self.__cache__[key]
+        except:
+            value = method(self, *args, **kwargs)
+            self.__cache__[key] = value
+            return value
+    
+    return wrapper
+
+def externally_cached(cache):
+    def func(method):
+        def wrapper(self, *args, **kwargs):
+            key = (id(self),
+                   method.__name__,
+                   args,
+                   tuple(kwargs.items()))
+
+            try:
+                return cache[key]
+            except:
+                value = method(self, *args, **kwargs)
+                cache[key] = value
+                return value
+        return wrapper
+    return func
 
 class ImageDimensions:
     def __init__(self, width, height):
@@ -60,9 +131,6 @@ class Size:
     def __init__(self, size):
         self.size = size
 
-    def get_size(self):
-        return self.size
-
     def __str__(self):
         if self.size < 1024:
             return "%d bytes" % self.size
@@ -74,9 +142,6 @@ class Size:
 class Datetime:
     def __init__(self, datetime):
         self.datetime = datetime
-
-    def get_datetime(self):
-        return self.datetime
 
     def __lt__(self, other):
         return self.datetime < other.datetime
@@ -102,6 +167,7 @@ class File:
         size = stat.st_size
         return Size(size)
 
+    @internally_cached
     def get_sha1(self):
         with open(self.filename, "r") as input_:
             return hashlib.sha1(input_.read()).hexdigest()
@@ -153,22 +219,23 @@ class File:
         raise Exception("Couldn't find '%s' in trash" % self.filename)
 
 class ImageFile(File):
+    pixbuf_cache = cache(10)
+    pixbuf_anim_cache = cache(10)
+
     def __init__(self, filename):
         File.__init__(self, filename)
-        self.dimensions = None
-        self.pixbuf = None
         self.rotation = 0
         self.flip_h = False
         self.flip_v = False
 
+    @externally_cached(pixbuf_cache)
     def get_pixbuf(self):
-        if not self.pixbuf:
-            self.pixbuf = gtk.gdk.pixbuf_new_from_file(self.get_filename())
-        return self.pixbuf
+        return gtk.gdk.pixbuf_new_from_file(self.get_filename())
 
     def is_static_image(self):
         return ".gif" not in self.get_basename() # XXX
 
+    @externally_cached(pixbuf_anim_cache)
     def get_pixbuf_anim_at_size(self, width, height):
         loader = gtk.gdk.PixbufLoader()
         loader.set_size(width, height)
@@ -200,11 +267,10 @@ class ImageFile(File):
 
         return rotated
 
+    @internally_cached
     def get_dimensions(self):
-        if not self.dimensions:
-            self.dimensions = ImageDimensions(self.get_pixbuf().get_width(), 
-                                              self.get_pixbuf().get_height())
-        return self.dimensions
+        return ImageDimensions(self.get_pixbuf().get_width(), 
+                               self.get_pixbuf().get_height())
 
 class FileManager:
     def __init__(self, on_list_empty, on_list_modified):
