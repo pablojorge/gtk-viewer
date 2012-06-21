@@ -35,7 +35,7 @@ import optparse
 #  * http://stackoverflow.com/questions/6078368/how-to-embed-video-in-gtk-application-window-using-gstreamer-xoverlay
 #  * http://www.daa.com.au/pipermail/pygtk/2008-June/015332.html
 
-class cache:
+class Cache:
     def __init__(self, limit=None):
         self.keys = []
         self.limit = limit
@@ -75,28 +75,7 @@ class cache:
             self.misses += 1
             raise
 
-    def has(self, key):
-        return key in self.store
-
-def internally_cached(method):
-    def wrapper(self, *args, **kwargs):
-        key = (method.__name__,
-               args,
-               tuple(kwargs.items()))
-
-        if not hasattr(self, "__cache__"):
-            self.__cache__ = cache()
-    
-        try:
-            return self.__cache__[key]
-        except:
-            value = method(self, *args, **kwargs)
-            self.__cache__[key] = value
-            return value
-    
-    return wrapper
-
-def externally_cached(cache):
+def cached(cache_=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
             key = (id(self),
@@ -104,6 +83,13 @@ def externally_cached(cache):
                    args,
                    tuple(kwargs.items()))
 
+            if not cache_:
+                if not hasattr(self, "__cache__"):
+                    self.__cache__ = Cache()
+                cache = self.__cache__
+            else:
+                cache = cache_
+    
             try:
                 return cache[key]
             except:
@@ -167,7 +153,7 @@ class File:
         size = stat.st_size
         return Size(size)
 
-    @internally_cached
+    @cached()
     def get_sha1(self):
         with open(self.filename, "r") as input_:
             return hashlib.sha1(input_.read()).hexdigest()
@@ -219,8 +205,8 @@ class File:
         raise Exception("Couldn't find '%s' in trash" % self.filename)
 
 class ImageFile(File):
-    pixbuf_cache = cache(10)
-    pixbuf_anim_cache = cache(10)
+    pixbuf_cache = Cache(10)
+    pixbuf_anim_cache = Cache(10)
 
     def __init__(self, filename):
         File.__init__(self, filename)
@@ -228,14 +214,14 @@ class ImageFile(File):
         self.flip_h = False
         self.flip_v = False
 
-    @externally_cached(pixbuf_cache)
+    @cached(pixbuf_cache)
     def get_pixbuf(self):
         return gtk.gdk.pixbuf_new_from_file(self.get_filename())
 
     def is_static_image(self):
         return ".gif" not in self.get_basename() # XXX
 
-    @externally_cached(pixbuf_anim_cache)
+    @cached(pixbuf_anim_cache)
     def get_pixbuf_anim_at_size(self, width, height):
         loader = gtk.gdk.PixbufLoader()
         loader.set_size(width, height)
@@ -267,7 +253,7 @@ class ImageFile(File):
 
         return rotated
 
-    @internally_cached
+    @cached()
     def get_dimensions(self):
         return ImageDimensions(self.get_pixbuf().get_width(), 
                                self.get_pixbuf().get_height())
