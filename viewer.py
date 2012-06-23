@@ -78,7 +78,7 @@ class Cache:
 def cached(cache_=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
-            key = (id(self),
+            key = (hash(self),
                    method.__name__,
                    args,
                    tuple(kwargs.items()))
@@ -167,6 +167,9 @@ class File:
     def get_ctime(self):
         return Datetime(os.stat(self.filename).st_ctime)
 
+    def __hash__(self):
+        return hash(self.filename)
+
     def __eq__(self, other):
         if isinstance(other, str):
             return self.filename == other
@@ -236,7 +239,8 @@ class ImageFile(File):
         else:
             self.flip_v = not self.flip_v
 
-    def rotate(self, angle):
+    def rotate(self, clockwise):
+        angle = (+90 if clockwise else -90)
         self.rotation = (self.rotation + angle) % 360
 
     def get_pixbuf_at_size(self, width, height):
@@ -257,6 +261,16 @@ class ImageFile(File):
     def get_dimensions(self):
         return ImageDimensions(self.get_pixbuf().get_width(), 
                                self.get_pixbuf().get_height())
+
+class Action:
+    NORMAL = 0
+    WARNING = 1
+    DANGER = 2
+
+    def __init__(self, severity, description, undo):
+        self.severity = severity
+        self.description = description
+        self.undo = undo
 
 class FileManager:
     def __init__(self, on_list_empty, on_list_modified):
@@ -337,8 +351,9 @@ class FileManager:
             self.index = orig_index # XXX podria no existir mas
             self.on_list_modified()
 
-        return ("'%s' renamed to '%s'" % (orig_name, current.get_basename()),
-                undo_action)
+        return Action(Action.NORMAL,
+                      "'%s' renamed to '%s'" % (orig_name, current.get_basename()),
+                      undo_action)
 
     def move_current(self, target_dir, target_name=''):
         current = self.get_current_file()
@@ -363,8 +378,9 @@ class FileManager:
             self.index = orig_index # XXX podria ser out of bounds
             self.on_list_modified()
 
-        return ("'%s' moved to '%s'" % (orig_filename, target_dir),
-                undo_action)
+        return Action(Action.NORMAL,
+                      "'%s' moved to '%s'" % (orig_filename, target_dir),
+                      undo_action)
 
     def delete_current(self):
         current = self.get_current_file()
@@ -381,8 +397,9 @@ class FileManager:
             self.index = orig_index # XXX podria ser out of bounds
             self.on_list_modified()
 
-        return ("'%s' deleted" % (orig_filename),
-                undo_action)
+        return Action(Action.DANGER,
+                      "'%s' deleted" % (orig_filename),
+                      undo_action)
 
     def toggle_star(self):
         current = self.get_current_file()
@@ -400,8 +417,9 @@ class FileManager:
             self.index = orig_index # XXX podria no existir mas
             self.on_list_modified()
 
-        return ("'%s' %s" % (orig_name, "unstarred" if was_starred else "starred"),
-                undo_action)
+        return Action(Action.NORMAL,
+                      "'%s' %s" % (orig_name, "unstarred" if was_starred else "starred"),
+                      undo_action)
 
     # Internal helpers:
     def get_safe_candidate(self, target):
@@ -423,14 +441,15 @@ class FileManager:
         new_file = ImageFile(os.path.join(target_dir, target_name))
 
         if current.get_sha1() == new_file.get_sha1():
-            _, undo_action = self.delete_current()
-            return ("'%s' deleted to avoid duplicates" % orig_filename,
-                    undo_action)
+            action = self.delete_current()
+            action.description = "'%s' deleted to avoid duplicates" % orig_filename
+            return action
         else:
             candidate = self.get_safe_candidate(target_dir)
-            _, undo_action = self.move_current(target_dir, candidate)
-            return ("'%s' auto-renamed to '%s' in '%s'" % (orig_filename, candidate, target_dir),
-                    undo_action)
+            action = self.move_current(target_dir, candidate)
+            action.severity = Action.WARNING
+            action.description = "'%s' auto-renamed to '%s' in '%s'" % (orig_filename, candidate, target_dir)
+            return action
 
     def on_current_eliminated(self):
         del self.filelist[self.index]
@@ -674,11 +693,11 @@ class ImageViewer:
         self.redraw()
 
     def rotate_c(self):
-        self.image_file.rotate(+90)
+        self.image_file.rotate(clockwise=True)
         self.redraw()
 
     def rotate_cc(self):
-        self.image_file.rotate(-90)
+        self.image_file.rotate(clockwise=False)
         self.redraw()
 
     def get_scaled_size(self):
@@ -875,13 +894,13 @@ class ViewerApp:
     TH_SIZE = 200
     BG_COLOR = "#000000"
 
-    def __init__(self, files, start_file):
+    def __init__(self, files, start_file, base_dir=None):
         ### Data definition
         self.file_manager = FileManager(self.on_list_empty,
                                         self.on_list_modified)
 
         self.files_order = None
-        self.base_dir = None
+        self.base_dir = base_dir
         self.last_opened_file = None
         self.last_targets = []
         self.undo_stack = []
@@ -1121,8 +1140,17 @@ class ViewerApp:
             additional += "\n<i>Last directory:</i> <b>%s</b>" % self.last_targets[0]
 
         if self.undo_stack:
-            desc, _ = self.undo_stack[-1]
-            additional += "\n<i>Last action:</i> <span background='yellow'>%s</span>" % desc
+            last_action = self.undo_stack[-1]
+            background, foreground = {
+                Action.NORMAL : ("green", None),
+                Action.WARNING : ("yellow", None),
+                Action.DANGER : ("red", "white")
+            }[last_action.severity]
+            span = "<span"
+            if background: span += " background='%s'" % background
+            if foreground: span += " foreground='%s'" % foreground
+            span += ">%s</span>" % last_action.description
+            additional += "\n<i>Last action:</i> " + span
 
         self.additional_info.set_markup("%s" % additional)
 
@@ -1150,7 +1178,6 @@ class ViewerApp:
             "Page_Up"     : self.jump_backward,
             "space"       : self.next_image,
             "Right"       : self.next_image,
-            "Return"      : self.next_image,
             "BackSpace"   : self.prev_image,
             "Left"        : self.prev_image,
 
@@ -1161,6 +1188,7 @@ class ViewerApp:
             "F2"          : self.rename_current,
             "F3"          : self.select_base_dir,
             "period"      : self.repeat_selection,
+            "Return"      : self.repeat_selection,
             "z"           : self.undo_last,
             "s"           : self.toggle_star,
             "Delete"      : self.delete_image,
@@ -1240,7 +1268,10 @@ class ViewerApp:
         renamer.show()
 
     def select_base_dir(self):
-        initial_dir = self.file_manager.get_current_file().get_dirname()
+        if self.base_dir:
+            initial_dir = self.base_dir
+        else:
+            initial_dir = self.file_manager.get_current_file().get_dirname()
         selector = SelectorDialog(initial_dir=initial_dir, 
                                   last_targets=[], 
                                   callback=self.on_base_dir_selected)
@@ -1258,8 +1289,8 @@ class ViewerApp:
             InfoDialog(self.window, "Nothing to undo!").run()
             return
 
-        _, undo_action = self.undo_stack.pop()
-        undo_action()
+        action = self.undo_stack.pop()
+        action.undo()
 
     def toggle_star(self):
         self.undo_stack.append(self.file_manager.toggle_star())
@@ -1358,12 +1389,14 @@ def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
 def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
 
+    parser.add_option("", "--base-dir")
+
     options, args = parser.parse_args()
 
     files, start_file = get_files_from_args(args)
 
     try:
-        app = ViewerApp(files, start_file)
+        app = ViewerApp(files, start_file, options.base_dir)
         app.run()
     except Exception, e:
         print "Error:", e
