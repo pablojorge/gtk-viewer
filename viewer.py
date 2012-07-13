@@ -14,6 +14,7 @@ import time
 import glob
 import shutil
 import optparse
+import subprocess
 
 # TODO:
 #
@@ -207,6 +208,9 @@ class File:
         
         raise Exception("Couldn't find '%s' in trash" % self.filename)
 
+    def external_open(self):
+        subprocess.check_call(["xdg-open", self.filename])
+
 class ImageFile(File):
     pixbuf_cache = Cache(10)
     pixbuf_anim_cache = Cache(10)
@@ -262,6 +266,32 @@ class ImageFile(File):
         return ImageDimensions(self.get_pixbuf().get_width(), 
                                self.get_pixbuf().get_height())
 
+class PDFFile(ImageFile):
+    pixbuf_cache = Cache(10)
+
+    @cached(pixbuf_cache)
+    def get_pixbuf(self):
+        tmp_dir = "/tmp" # XXX tempfile?
+        tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+        tmp_img = "%s-000.jpg" % tmp_root
+        subprocess.check_call(["pdfimages", "-f", "1", "-l", "1", "-j", 
+                              self.get_filename(), 
+                              tmp_root])
+        pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
+        os.unlink(tmp_img)
+        return pixbuf
+
+class FileFactory:
+    def __init__(self):
+        pass
+
+    @classmethod
+    def create(cls, filename):
+        if ".pdf" in filename.lower():
+            return PDFFile(filename)
+
+        return ImageFile(filename)
+
 class Action:
     NORMAL = 0
     WARNING = 1
@@ -281,7 +311,7 @@ class FileManager:
         self.on_list_modified = on_list_modified
 
     def set_files(self, filelist):
-        self.filelist = map(ImageFile, filelist)
+        self.filelist = map(FileFactory.create, filelist)
 
     def get_current_file(self):
         return self.filelist[self.index]
@@ -372,7 +402,7 @@ class FileManager:
         self.on_current_eliminated()
 
         def undo_action():
-            restored = ImageFile(new_filename)
+            restored = FileFactory.create(new_filename)
             restored.rename(orig_filename)
             self.filelist.insert(orig_index, restored)
             self.index = orig_index # XXX podria ser out of bounds
@@ -391,7 +421,7 @@ class FileManager:
         self.on_current_eliminated()
 
         def undo_action():
-            restored = ImageFile(orig_filename)
+            restored = FileFactory.create(orig_filename)
             restored.untrash()
             self.filelist.insert(orig_index, restored)
             self.index = orig_index # XXX podria ser out of bounds
@@ -438,7 +468,7 @@ class FileManager:
     def handle_duplicate(self, target_dir, target_name):
         current = self.get_current_file()
         orig_filename = current.get_filename()
-        new_file = ImageFile(os.path.join(target_dir, target_name))
+        new_file = FileFactory.create(os.path.join(target_dir, target_name))
 
         if current.get_sha1() == new_file.get_sha1():
             action = self.delete_current()
@@ -554,7 +584,7 @@ class OpenDialog:
         filename = chooser.get_preview_filename()
         if filename:
             if os.path.isfile(filename):
-                self.th_viewer.load(ImageFile(filename))
+                self.th_viewer.load(FileFactory.create(filename))
                 self.th_viewer.show()
             else:
                 self.th_viewer.hide()
@@ -1189,6 +1219,7 @@ class ViewerApp:
             "F3"          : self.select_base_dir,
             "period"      : self.repeat_selection,
             "Return"      : self.repeat_selection,
+            "u"           : self.undo_last,
             "z"           : self.undo_last,
             "s"           : self.toggle_star,
             "Delete"      : self.delete_image,
@@ -1196,6 +1227,7 @@ class ViewerApp:
             "D"           : self.sort_by_date_desc,
             "n"           : self.sort_by_name_asc,
             "N"           : self.sort_by_name_desc,
+            "x"           : self.external_open,
 
             ## Image manipulation:
             "1"           : self.zoom_100,
@@ -1314,6 +1346,9 @@ class ViewerApp:
         self.files_order = "Name Desc"
         self.file_manager.sort_by_name(reverse=True)
 
+    def external_open(self):
+        self.file_manager.get_current_file().external_open()
+
     def zoom_100(self):
         self.image_viewer.zoom_at(100)
         self.refresh_info()
@@ -1340,10 +1375,15 @@ class ViewerApp:
         gtk.main()
 
 def has_known_file_ext(filename):
-    for format_ in gtk.gdk.pixbuf_get_formats():
-        for extension in format_["extensions"]:
-            if ("." + extension) in filename.lower():
-                return True
+    added_extensions = ["pdf"]
+    pixbuf_extensions = reduce(lambda a, b: a + b, 
+                               [format_["extensions"] 
+                                for format_ in gtk.gdk.pixbuf_get_formats()],
+                               [])
+
+    for extension in pixbuf_extensions + added_extensions:
+        if ("." + extension) in filename.lower():
+            return True
 
     return False
 
@@ -1376,6 +1416,16 @@ def get_files_from_args(args):
 
     return files, start_file
 
+def get_files_from_args_recursive(args):
+    files = []
+    start_file = None
+
+    for arg in args:
+        for dirpath, dirnames, filenames in os.walk(arg):
+            files.extend(get_files_from_dir(dirpath))
+
+    return files, start_file
+        
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
     # XXX linux-only
     with open("/proc/%i/stat" % pid) as statfile:
@@ -1389,11 +1439,18 @@ def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
 def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
 
+    parser.add_option("-r", "--recursive", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
     options, args = parser.parse_args()
 
-    files, start_file = get_files_from_args(args)
+    if not args:
+        args = ["."]
+
+    if options.recursive:
+        files, start_file = get_files_from_args_recursive(args)
+    else:
+        files, start_file = get_files_from_args(args)
 
     try:
         app = ViewerApp(files, start_file, options.base_dir)
