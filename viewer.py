@@ -2,6 +2,7 @@
 
 import os
 import sys
+import signal
 import string
 
 import pygtk
@@ -15,6 +16,7 @@ import glob
 import shutil
 import optparse
 import subprocess
+import datetime
 
 # TODO:
 #
@@ -99,6 +101,13 @@ def cached(cache_=None):
                 return value
         return wrapper
     return func
+
+def execute(args, check_retcode=True):
+    popen = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = popen.communicate()
+    if check_retcode and popen.returncode != 0:
+        raise Exception(str(args) + " failed!")
+    return stdout + stderr
 
 class ImageDimensions:
     def __init__(self, width, height):
@@ -208,8 +217,8 @@ class File:
         
         raise Exception("Couldn't find '%s' in trash" % self.filename)
 
-    def external_open(self):
-        subprocess.check_call(["xdg-open", self.filename])
+    def external_open(self, xid):
+        execute(["xdg-open", self.filename])
 
 class ImageFile(File):
     pixbuf_cache = Cache(10)
@@ -267,19 +276,62 @@ class ImageFile(File):
                                self.get_pixbuf().get_height())
 
 class PDFFile(ImageFile):
+    valid_exts = ["pdf"]
     pixbuf_cache = Cache(10)
 
     @cached(pixbuf_cache)
     def get_pixbuf(self):
         tmp_dir = "/tmp" # XXX tempfile?
         tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+        tmp_img = "%s-000.jpg" % tmp_root # XXX no siempre genera jpg, ni uno solo
+        execute(["pdfimages", "-f", "1", "-l", "1", "-j", 
+                 self.get_filename(), 
+                 tmp_root])
+        pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
+        os.unlink(tmp_img) # XXX quizas hay que borrar mas
+        return pixbuf
+
+class VideoFile(ImageFile):
+    valid_exts = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
+    video_cache = Cache(10)
+
+    @cached()
+    def get_duration(self):
+        output = execute(["ffmpeg", "-i", self.get_filename()], check_retcode=False)
+        for line in output.split("\n"):
+            tokens = map(lambda s: s.strip(), line.split(","))
+            if tokens[0].startswith("Duration:"):
+                dummy, duration = tokens[0].split(": ")
+                st_time = time.strptime(duration.split(".")[0], "%H:%M:%S")
+                delta = datetime.timedelta(hours=st_time.tm_hour,
+                                           minutes=st_time.tm_min,
+                                           seconds=st_time.tm_sec)
+                return delta.seconds
+
+    @cached(video_cache)
+    def get_pixbuf(self):
+        second_cap = int(round(self.get_duration() * 0.2))
+        tmp_dir = "/tmp" # XXX tempfile?
+        tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
         tmp_img = "%s-000.jpg" % tmp_root
-        subprocess.check_call(["pdfimages", "-f", "1", "-l", "1", "-j", 
-                              self.get_filename(), 
-                              tmp_root])
+        execute(["ffmpeg", "-ss", str(second_cap), 
+                 "-i", self.get_filename(), 
+                 "-vframes", "1",
+                 "-an",
+                 tmp_img])
         pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
         os.unlink(tmp_img)
         return pixbuf
+
+    def get_sha1(self):
+        # avoiding this for video files
+        return "Duration: %s" % datetime.timedelta(seconds=self.get_duration())
+
+    def external_open(self, xid):
+        popen = subprocess.Popen(["mplayer", self.filename, "-wid", str(xid)],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        return popen.pid
 
 class FileFactory:
     def __init__(self):
@@ -287,8 +339,13 @@ class FileFactory:
 
     @classmethod
     def create(cls, filename):
-        if ".pdf" in filename.lower():
-            return PDFFile(filename)
+        for ext in PDFFile.valid_exts:
+            if filename.lower().endswith("." + ext):
+                return PDFFile(filename)
+
+        for ext in VideoFile.valid_exts:
+            if filename.lower().endswith("." + ext):
+                return VideoFile(filename)
 
         return ImageFile(filename)
 
@@ -935,6 +992,7 @@ class ViewerApp:
         self.last_targets = []
         self.undo_stack = []
 
+        self.external_app = None
         self.fullscreen = False
 
         ### Window composition
@@ -1124,7 +1182,13 @@ class ViewerApp:
 
         self.undo_stack.append(self.file_manager.move_current(target_dir))
 
+    def stop_external_app(self):
+        if self.external_app:
+            os.kill(self.external_app, signal.SIGTERM)
+            self.external_app = None
+
     def reload_viewer(self):
+        self.stop_external_app()
         self.image_viewer.load(self.file_manager.get_current_file())
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
@@ -1240,6 +1304,7 @@ class ViewerApp:
 
     ## action handlers
     def quit_app(self):
+        self.stop_external_app()
         gtk.Widget.destroy(self.window)
 
     def show_help(self):
@@ -1347,7 +1412,9 @@ class ViewerApp:
         self.file_manager.sort_by_name(reverse=True)
 
     def external_open(self):
-        self.file_manager.get_current_file().external_open()
+        current_file = self.file_manager.get_current_file()
+        self.stop_external_app()
+        self.external_app = current_file.external_open(self.window.get_window().xid)
 
     def zoom_100(self):
         self.image_viewer.zoom_at(100)
@@ -1375,7 +1442,7 @@ class ViewerApp:
         gtk.main()
 
 def has_known_file_ext(filename):
-    added_extensions = ["pdf"]
+    added_extensions = PDFFile.valid_exts + VideoFile.valid_exts
     pixbuf_extensions = reduce(lambda a, b: a + b, 
                                [format_["extensions"] 
                                 for format_ in gtk.gdk.pixbuf_get_formats()],
