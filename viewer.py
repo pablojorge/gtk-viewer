@@ -217,8 +217,11 @@ class File:
         
         raise Exception("Couldn't find '%s' in trash" % self.filename)
 
-    def external_open(self, xid):
+    def external_open(self):
         execute(["xdg-open", self.filename])
+
+    def embedded_open(self, xid):
+        pass
 
 class ImageFile(File):
     pixbuf_cache = Cache(10)
@@ -327,7 +330,7 @@ class VideoFile(ImageFile):
         # avoiding this for video files
         return "Duration: %s" % datetime.timedelta(seconds=self.get_duration())
 
-    def external_open(self, xid):
+    def embedded_open(self, xid):
         popen = subprocess.Popen(["mplayer", self.filename, "-wid", str(xid)],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
@@ -992,7 +995,7 @@ class ViewerApp:
         self.last_targets = []
         self.undo_stack = []
 
-        self.external_app = None
+        self.embedded_app = None
         self.fullscreen = False
 
         ### Window composition
@@ -1182,13 +1185,13 @@ class ViewerApp:
 
         self.undo_stack.append(self.file_manager.move_current(target_dir))
 
-    def stop_external_app(self):
-        if self.external_app:
-            os.kill(self.external_app, signal.SIGTERM)
-            self.external_app = None
+    def stop_embedded_app(self):
+        if self.embedded_app:
+            os.kill(self.embedded_app, signal.SIGTERM)
+            self.embedded_app = None
 
     def reload_viewer(self):
-        self.stop_external_app()
+        self.stop_embedded_app()
         self.image_viewer.load(self.file_manager.get_current_file())
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
@@ -1292,6 +1295,7 @@ class ViewerApp:
             "n"           : self.sort_by_name_asc,
             "N"           : self.sort_by_name_desc,
             "x"           : self.external_open,
+            "e"           : self.embedded_open,
 
             ## Image manipulation:
             "1"           : self.zoom_100,
@@ -1304,7 +1308,7 @@ class ViewerApp:
 
     ## action handlers
     def quit_app(self):
-        self.stop_external_app()
+        self.stop_embedded_app()
         gtk.Widget.destroy(self.window)
 
     def show_help(self):
@@ -1413,8 +1417,14 @@ class ViewerApp:
 
     def external_open(self):
         current_file = self.file_manager.get_current_file()
-        self.stop_external_app()
-        self.external_app = current_file.external_open(self.window.get_window().xid)
+        current_file.external_open()
+
+    def embedded_open(self):
+        current_file = self.file_manager.get_current_file()
+        if self.embedded_app:
+            self.reload_viewer()
+        else:
+            self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
 
     def zoom_100(self):
         self.image_viewer.zoom_at(100)
