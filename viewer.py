@@ -287,6 +287,7 @@ class PDFFile(ImageFile):
         tmp_dir = "/tmp" # XXX tempfile?
         tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
         tmp_img = "%s-000.jpg" % tmp_root # XXX no siempre genera jpg, ni uno solo
+                                          # XXX ver si genero con ext .pbm o .ppm
         execute(["pdfimages", "-f", "1", "-l", "1", "-j", 
                  self.get_filename(), 
                  tmp_root])
@@ -429,20 +430,32 @@ class FileManager:
                                reverse=reverse)
         self.go_file(filename)
 
-    def rename_current(self, new_name):
+    def rename_current(self, new_filename):
         current = self.get_current_file()
         orig_index = self.get_current_index()
-        orig_name = current.get_basename()
-        current.rename(os.path.join(current.get_dirname(), new_name))
-        self.on_list_modified()
+        orig_dirname = current.get_dirname()
+        orig_filename = current.get_filename()
+        current.rename(new_filename)
 
-        def undo_action():
-            current.rename(os.path.join(current.get_dirname(), orig_name))
-            self.index = orig_index # XXX podria no existir mas
+        if os.path.abspath(orig_dirname) == os.path.abspath(current.get_dirname()):
             self.on_list_modified()
 
+            def undo_action():
+                current.rename(orig_filename)
+                self.index = orig_index # XXX podria no existir mas
+                self.on_list_modified()
+        else:
+            self.on_current_eliminated()
+            
+            def undo_action():
+                restored = FileFactory.create(new_filename)
+                restored.rename(orig_filename)
+                self.filelist.insert(orig_index, restored)
+                self.index = orig_index # XXX podria ser out of bounds
+                self.on_list_modified()
+
         return Action(Action.NORMAL,
-                      "'%s' renamed to '%s'" % (orig_name, current.get_basename()),
+                      "'%s' renamed to '%s'" % (orig_filename, new_filename),
                       undo_action)
 
     def move_current(self, target_dir, target_name=''):
@@ -551,11 +564,11 @@ class FileManager:
                 self.index = self.index - len(self.filelist)
             self.on_list_modified()
 
-class SelectorDialog:
-    def __init__(self, initial_dir, last_targets, callback):
+class DirectorySelectorDialog:
+    def __init__(self, title, initial_dir, last_targets, callback):
         self.callback = callback
 
-        self.chooser = gtk.FileChooserDialog(title="Specify target directory",
+        self.chooser = gtk.FileChooserDialog(title=title,
                                              action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                              buttons=(gtk.STOCK_CANCEL, 
                                                       gtk.RESPONSE_CANCEL,
@@ -614,19 +627,29 @@ class SelectorDialog:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
-class OpenDialog:
-    def __init__(self, initial_dir, callback):
+class FileSelectorDialog:
+    def __init__(self, title, initial_dir, initial_filename, callback):
         self.callback = callback
 
-        self.chooser = gtk.FileChooserDialog(title="Open file",
-                                             action=gtk.FILE_CHOOSER_ACTION_OPEN,
+        if initial_filename:
+            action = gtk.FILE_CHOOSER_ACTION_SAVE
+            button = gtk.STOCK_SAVE
+        else:
+            action = gtk.FILE_CHOOSER_ACTION_OPEN
+            button = gtk.STOCK_OPEN
+
+        self.chooser = gtk.FileChooserDialog(title=title,
+                                             action=action,
                                              buttons=(gtk.STOCK_CANCEL, 
                                                       gtk.RESPONSE_CANCEL,
-                                                      gtk.STOCK_OPEN,
+                                                      button,
                                                       gtk.RESPONSE_OK))
 
         if initial_dir:
             self.chooser.set_current_folder(initial_dir)
+
+        if initial_filename:
+            self.chooser.set_filename(initial_filename)
 
         self.th_viewer = ThumbnailViewer(300)
         widget = self.th_viewer.get_widget()
@@ -639,6 +662,18 @@ class OpenDialog:
         img_filter.set_name("Images")
         img_filter.add_pixbuf_formats()
         self.chooser.add_filter(img_filter)
+
+        pdf_filter = gtk.FileFilter()
+        pdf_filter.set_name("PDF Files")
+        for ext in PDFFile.valid_exts:
+            pdf_filter.add_pattern("*." + ext)
+        self.chooser.add_filter(pdf_filter)
+
+        video_filter = gtk.FileFilter()
+        video_filter.set_name("Video Files")
+        for ext in VideoFile.valid_exts:
+            video_filter.add_pattern("*." + ext)
+        self.chooser.add_filter(video_filter)
 
     def on_selection_changed(self, chooser):
         filename = chooser.get_preview_filename()
@@ -659,31 +694,35 @@ class OpenDialog:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
-class RenameDialog:
-    def __init__(self, parent, basename, callback):
-        self.basename = basename
-        self.callback = callback
+class TargetSelectorDialog(DirectorySelectorDialog):
+    def __init__(self, initial_dir, last_targets, callback):
+        DirectorySelectorDialog.__init__(self, 
+                                         "Specify target directory",
+                                         initial_dir,
+                                         last_targets,
+                                         callback)
 
-        self.window = gtk.Dialog(title="Rename", parent=parent, flags=gtk.DIALOG_MODAL)
+class BasedirSelectorDialog(DirectorySelectorDialog):
+    def __init__(self, initial_dir, last_targets, callback):
+        DirectorySelectorDialog.__init__(self, 
+                                         "Specify base directory",
+                                         initial_dir,
+                                         last_targets,
+                                         callback)
 
-        label = gtk.Label()
-        label.set_text("New name:")
-        self.window.action_area.pack_start(label, True, True, 5)
+class OpenDialog(FileSelectorDialog):
+    def __init__(self, initial_dir, callback):
+        FileSelectorDialog.__init__(self, title="Open file", 
+                                          initial_dir=initial_dir, 
+                                          initial_filename=None,
+                                          callback=callback)
 
-        self.entry = gtk.Entry()
-        self.entry.connect("activate", self.on_entry_activate)
-        self.entry.set_text(basename)
-
-        self.window.action_area.pack_start(self.entry, True, True, 5)
-
-    def on_entry_activate(self, entry):
-        if entry.get_text() != self.basename:
-            self.callback(entry.get_text())
-        gtk.Widget.destroy(self.window)
-
-    def show(self):
-        self.window.show_all()
-        self.entry.select_region(0, self.entry.get_text().rindex('.'))
+class RenameDialog(FileSelectorDialog):
+    def __init__(self, initial_filename, callback):
+        FileSelectorDialog.__init__(self, title="Select new name", 
+                                          initial_dir=None,
+                                          initial_filename=initial_filename, 
+                                          callback=callback)
 
 class HelpDialog:
     def __init__(self, parent, bindings):
@@ -1353,9 +1392,9 @@ class ViewerApp:
         else:
             initial_dir = self.file_manager.get_current_file().get_dirname()
 
-        selector = SelectorDialog(initial_dir=initial_dir, 
-                                  last_targets=self.last_targets, 
-                                  callback=self.on_target_selected)
+        selector = TargetSelectorDialog(initial_dir=initial_dir, 
+                                        last_targets=self.last_targets, 
+                                        callback=self.on_target_selected)
         selector.run()
 
     def open_file(self):
@@ -1364,18 +1403,18 @@ class ViewerApp:
         open_dialog.run()
 
     def rename_current(self):
-        basename = self.file_manager.get_current_file().get_basename()
-        renamer = RenameDialog(self.window, basename, self.on_new_name_selected)
-        renamer.show()
+        filename = self.file_manager.get_current_file().get_filename()
+        renamer = RenameDialog(filename, self.on_new_name_selected)
+        renamer.run()
 
     def select_base_dir(self):
         if self.base_dir:
             initial_dir = self.base_dir
         else:
             initial_dir = self.file_manager.get_current_file().get_dirname()
-        selector = SelectorDialog(initial_dir=initial_dir, 
-                                  last_targets=[], 
-                                  callback=self.on_base_dir_selected)
+        selector = BasedirSelectorDialog(initial_dir=initial_dir, 
+                                         last_targets=[], 
+                                         callback=self.on_base_dir_selected)
         selector.run()
 
     def repeat_selection(self):
