@@ -22,7 +22,6 @@ import datetime
 #
 #  Funcionalidad:
 #
-#  * rename dialog como un save dialog
 #  * soporte para copiar ademas de mover
 #  * hacer un menu y un toolbox
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
@@ -225,7 +224,6 @@ class File:
 
 class ImageFile(File):
     pixbuf_cache = Cache(10)
-    pixbuf_anim_cache = Cache(10)
 
     def __init__(self, filename):
         File.__init__(self, filename)
@@ -233,21 +231,12 @@ class ImageFile(File):
         self.flip_h = False
         self.flip_v = False
 
+    def draw(self, widget, width, height):
+        widget.set_from_pixbuf(self.get_pixbuf_at_size(width, height))
+
     @cached(pixbuf_cache)
     def get_pixbuf(self):
         return gtk.gdk.pixbuf_new_from_file(self.get_filename())
-
-    def is_static_image(self):
-        return ".gif" not in self.get_basename() # XXX
-
-    @cached(pixbuf_anim_cache)
-    def get_pixbuf_anim_at_size(self, width, height):
-        loader = gtk.gdk.PixbufLoader()
-        loader.set_size(width, height)
-        with open(self.get_filename(), "r") as input_:
-            loader.write(input_.read())
-        loader.close()
-        return loader.get_animation()
 
     def toggle_flip(self, horizontal):
         if horizontal:
@@ -337,19 +326,42 @@ class VideoFile(ImageFile):
                                  stderr=subprocess.PIPE)
         return popen.pid
 
+class GIFFile(ImageFile):
+    valid_exts = ["gif"]
+    pixbuf_anim_cache = Cache(10)
+
+    def __init__(self, filename):
+        ImageFile.__init__(self, filename)
+        self.anim_toggle = False
+
+    def embedded_open(self, xid):
+        self.anim_toggle = not self.anim_toggle
+
+    def draw(self, widget, width, height):
+        if self.anim_toggle:
+            widget.set_from_animation(self.get_pixbuf_anim_at_size(width, height))
+        else:
+            widget.set_from_pixbuf(self.get_pixbuf_at_size(width, height))
+
+    @cached(pixbuf_anim_cache)
+    def get_pixbuf_anim_at_size(self, width, height):
+        loader = gtk.gdk.PixbufLoader()
+        loader.set_size(width, height)
+        with open(self.get_filename(), "r") as input_:
+            loader.write(input_.read())
+        loader.close()
+        return loader.get_animation()
+
 class FileFactory:
     def __init__(self):
         pass
 
     @classmethod
     def create(cls, filename):
-        for ext in PDFFile.valid_exts:
-            if filename.lower().endswith("." + ext):
-                return PDFFile(filename)
-
-        for ext in VideoFile.valid_exts:
-            if filename.lower().endswith("." + ext):
-                return VideoFile(filename)
+        for cls in PDFFile, VideoFile, GIFFile:
+            for ext in cls.valid_exts:
+                if filename.lower().endswith("." + ext):
+                    return cls(filename)
 
         return ImageFile(filename)
 
@@ -839,11 +851,7 @@ class ImageViewer:
 
     def redraw(self):
         width, height = self.get_scaled_size()
-
-        if self.image_file.is_static_image():
-            self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
-        else:
-            self.widget.set_from_animation(self.image_file.get_pixbuf_anim_at_size(width, height))
+        self.image_file.draw(self.widget, width, height)
 
     def force_zoom(self, width, height):
         im_dim = self.image_file.get_dimensions()
@@ -1229,8 +1237,9 @@ class ViewerApp:
             os.kill(self.embedded_app, signal.SIGTERM)
             self.embedded_app = None
 
-    def reload_viewer(self):
-        self.stop_embedded_app()
+    def reload_viewer(self, force_stop=True):
+        if force_stop:
+            self.stop_embedded_app()
         self.image_viewer.load(self.file_manager.get_current_file())
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
@@ -1461,9 +1470,10 @@ class ViewerApp:
     def embedded_open(self):
         current_file = self.file_manager.get_current_file()
         if self.embedded_app:
-            self.reload_viewer()
+            self.reload_viewer(force_stop=True)
         else:
             self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
+            self.reload_viewer(force_stop=False)
 
     def zoom_100(self):
         self.image_viewer.zoom_at(100)
