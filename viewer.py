@@ -27,15 +27,6 @@ import datetime
 #  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
 #    los bindings, con un get que devuleve bindings de acuerdo al modo)
 #  * hacer un help
-#
-#  Video:
-#
-#  * https://github.com/felipec/gst-player
-#  * http://code.google.com/p/gst-player/
-#  * http://mail.python.org/pipermail/python-es/2006-August/thread.html#13771
-#  * http://gstreamer-devel.966125.n4.nabble.com/How-to-embed-video-in-gtk-app-td970597.html
-#  * http://stackoverflow.com/questions/6078368/how-to-embed-video-in-gtk-application-window-using-gstreamer-xoverlay
-#  * http://www.daa.com.au/pipermail/pygtk/2008-June/015332.html
 
 class Cache:
     def __init__(self, limit=None):
@@ -312,9 +303,15 @@ class VideoFile(ImageFile):
                  "-vframes", "1",
                  "-an",
                  tmp_img])
-        pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
-        os.unlink(tmp_img)
-        return pixbuf
+        try:
+            pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
+            os.unlink(tmp_img)
+            return pixbuf
+        except:
+            print "Warning: unable to open", tmp_img
+            image = gtk.Image()
+            image.set_from_stock("",1)
+            return image.get_pixbuf()
 
     def get_sha1(self):
         # avoiding this for video files
@@ -329,16 +326,13 @@ class VideoFile(ImageFile):
 class GIFFile(ImageFile):
     valid_exts = ["gif"]
     pixbuf_anim_cache = Cache(10)
-
-    def __init__(self, filename):
-        ImageFile.__init__(self, filename)
-        self.anim_toggle = False
+    anim_toggle = False
 
     def embedded_open(self, xid):
-        self.anim_toggle = not self.anim_toggle
+        GIFFile.anim_toggle = not GIFFile.anim_toggle
 
     def draw(self, widget, width, height):
-        if self.anim_toggle:
+        if GIFFile.anim_toggle:
             widget.set_from_animation(self.get_pixbuf_anim_at_size(width, height))
         else:
             widget.set_from_pixbuf(self.get_pixbuf_at_size(width, height))
@@ -1329,6 +1323,7 @@ class ViewerApp:
             ## Files manipulation:
             "Down"        : self.show_selector,
             "Tab"         : self.show_selector,
+            "l"           : self.show_selector,
             "o"           : self.open_file,
             "F2"          : self.rename_current,
             "F3"          : self.select_base_dir,
@@ -1551,6 +1546,12 @@ def get_files_from_args_recursive(args):
             files.extend(get_files_from_dir(dirpath))
 
     return files, start_file
+
+def find_unorganized_directories(args):
+    for arg in args:
+        for dirpath, dirnames, filenames in os.walk(arg):
+            if dirnames and filenames:
+                print "'%s' is unorganized" % (dirpath)
         
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
     # XXX linux-only
@@ -1566,12 +1567,17 @@ def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
 
     parser.add_option("-r", "--recursive", action="store_true", default=False)
+    parser.add_option("-u", "--unorganized", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
     options, args = parser.parse_args()
 
     if not args:
         args = ["."]
+
+    if options.unorganized:
+        find_unorganized_directories(args)
+        return
 
     if options.recursive:
         files, start_file = get_files_from_args_recursive(args)
