@@ -1547,11 +1547,14 @@ def get_files_from_args_recursive(args):
 
     return files, start_file
 
-def find_unorganized_directories(args):
+def check_directories(args):
     for arg in args:
         for dirpath, dirnames, filenames in os.walk(arg):
             if dirnames and filenames:
-                print "'%s' is unorganized" % (dirpath)
+                print "'%s': dirs and files mixed (%d files)" % \
+                      (dirpath, len(filenames))
+            elif not dirnames and not filenames:
+                print "'%s': empty" % (dirpath)
         
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
     # XXX linux-only
@@ -1567,7 +1570,7 @@ def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
 
     parser.add_option("-r", "--recursive", action="store_true", default=False)
-    parser.add_option("-u", "--unorganized", action="store_true", default=False)
+    parser.add_option("-c", "--check", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
     options, args = parser.parse_args()
@@ -1575,8 +1578,8 @@ def main():
     if not args:
         args = ["."]
 
-    if options.unorganized:
-        find_unorganized_directories(args)
+    if options.check:
+        check_directories(args)
         return
 
     if options.recursive:
