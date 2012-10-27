@@ -266,13 +266,27 @@ class PDFFile(ImageFile):
     def get_pixbuf(self):
         tmp_dir = "/tmp" # XXX tempfile?
         tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
-        tmp_img = "%s-000.jpg" % tmp_root # XXX no siempre genera jpg, ni uno solo
-                                          # XXX ver si genero con ext .pbm o .ppm
         execute(["pdfimages", "-f", "1", "-l", "1", "-j", 
                  self.get_filename(), 
                  tmp_root])
-        pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
-        os.unlink(tmp_img) # XXX quizas hay que borrar mas
+
+        for ext in ["jpg", "pbm", "ppm"]:
+            try:
+                tmp_img = "%s-000.%s" % (tmp_root, ext)
+                pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
+                for filename in glob.glob(tmp_root + "*"):
+                    os.unlink(filename)
+                return pixbuf
+            except:
+                continue
+
+        print "Warning: unable to preview PDF file '%s'" % self.get_basename()
+        pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
+                                has_alpha=False, 
+                                bits_per_sample=8, 
+                                width=1, 
+                                height=1)
+        pixbuf.fill(0)
         return pixbuf
 
 class VideoFile(ImageFile):
