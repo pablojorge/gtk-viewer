@@ -259,7 +259,7 @@ class ImageFile(File):
                                self.get_pixbuf().get_height())
 
 class PDFFile(ImageFile):
-    valid_exts = ["pdf"]
+    valid_extensions = ["pdf"]
     pixbuf_cache = Cache(10)
 
     @cached(pixbuf_cache)
@@ -276,7 +276,7 @@ class PDFFile(ImageFile):
         return pixbuf
 
 class VideoFile(ImageFile):
-    valid_exts = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
+    valid_extensions = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
     video_cache = Cache(10)
 
     @cached()
@@ -324,7 +324,7 @@ class VideoFile(ImageFile):
         return popen.pid
 
 class GIFFile(ImageFile):
-    valid_exts = ["gif"]
+    valid_extensions = ["gif"]
     pixbuf_anim_cache = Cache(10)
     anim_toggle = False
 
@@ -353,7 +353,7 @@ class FileFactory:
     @classmethod
     def create(cls, filename):
         for cls in PDFFile, VideoFile, GIFFile:
-            for ext in cls.valid_exts:
+            for ext in cls.valid_extensions:
                 if filename.lower().endswith("." + ext):
                     return cls(filename)
 
@@ -671,13 +671,13 @@ class FileSelectorDialog:
 
         pdf_filter = gtk.FileFilter()
         pdf_filter.set_name("PDF Files")
-        for ext in PDFFile.valid_exts:
+        for ext in PDFFile.valid_extensions:
             pdf_filter.add_pattern("*." + ext)
         self.chooser.add_filter(pdf_filter)
 
         video_filter = gtk.FileFilter()
         video_filter.set_name("Video Files")
-        for ext in VideoFile.valid_exts:
+        for ext in VideoFile.valid_extensions:
             video_filter.add_pattern("*." + ext)
         self.chooser.add_filter(video_filter)
 
@@ -1495,24 +1495,54 @@ class ViewerApp:
     def run(self):
         gtk.main()
 
-def has_known_file_ext(filename):
-    added_extensions = PDFFile.valid_exts + VideoFile.valid_exts
-    pixbuf_extensions = reduce(lambda a, b: a + b, 
-                               [format_["extensions"] 
-                                for format_ in gtk.gdk.pixbuf_get_formats()],
-                               [])
+class FileTypeFilter:
+    allowed_extensions = []
 
-    for extension in pixbuf_extensions + added_extensions:
-        if ("." + extension) in filename.lower():
-            return True
+    @classmethod
+    def get_valid_extensions(cls):
+        return { "videos" : VideoFile.valid_extensions,
+                 "images" : cls.get_image_extensions(),
+                 "gifs" : GIFFile.valid_extensions,
+                 "pdfs" : PDFFile.valid_extensions }
 
-    return False
+    @classmethod
+    def get_image_extensions(cls):
+        ret = []
+
+        for format_ in gtk.gdk.pixbuf_get_formats():
+            for extension in format_["extensions"]:
+                if extension != "gif":
+                    ret.append(extension)
+
+        return ret
+
+    @classmethod
+    def process_options(cls, options):
+        valid_extensions = cls.get_valid_extensions()
+
+        for option in dir(options):
+            if (option.startswith("allow_") and
+                getattr(options, option)):
+                kind = option.replace("allow_", "")
+                cls.allowed_extensions += valid_extensions[kind]
+
+        if not cls.allowed_extensions:
+            for kind, extensions in valid_extensions.iteritems():
+                cls.allowed_extensions += extensions
+
+    @classmethod
+    def has_allowed_ext(cls, filename):
+        for extension in cls.allowed_extensions:
+            if ("." + extension) in filename.lower():
+                return True
+
+        return False
 
 def get_files_from_dir(directory):
     files = []
 
     for filename in glob.glob(os.path.join(directory, "*")):
-        if has_known_file_ext(filename):
+        if FileTypeFilter.has_allowed_ext(filename):
             files.append(filename)
 
     return sorted(files)
@@ -1525,14 +1555,14 @@ def get_files_from_args(args):
         if os.path.isdir(args[0]):
             files = get_files_from_dir(args[0])
         else:
-            if has_known_file_ext(args[0]):
+            if FileTypeFilter.has_allowed_ext(args[0]):
                 start_file = args[0]
             files = get_files_from_dir(os.path.dirname(args[0]))
     else:
         for arg in args:
             if os.path.isdir(arg):
                 files.extend(get_files_from_dir(arg))
-            elif has_known_file_ext(arg):
+            elif FileTypeFilter.has_allowed_ext(arg):
                 files.append(arg)
 
     return files, start_file
@@ -1573,10 +1603,17 @@ def main():
     parser.add_option("-c", "--check", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
+    parser.add_option("", "--allow-images", action="store_true", default=False)
+    parser.add_option("", "--allow-gifs", action="store_true", default=False)
+    parser.add_option("", "--allow-pdfs", action="store_true", default=False)
+    parser.add_option("", "--allow-videos", action="store_true", default=False)
+
     options, args = parser.parse_args()
 
     if not args:
         args = ["."]
+
+    FileTypeFilter.process_options(options)
 
     if options.check:
         check_directories(args)
