@@ -18,6 +18,8 @@ import optparse
 import subprocess
 import datetime
 
+from collections import defaultdict
+
 # TODO:
 #
 #  Funcionalidad:
@@ -214,6 +216,7 @@ class File:
         pass
 
 class ImageFile(File):
+    description = "image"
     pixbuf_cache = Cache(10)
 
     def __init__(self, filename):
@@ -259,6 +262,7 @@ class ImageFile(File):
                                self.get_pixbuf().get_height())
 
 class PDFFile(ImageFile):
+    description = "pdf"
     valid_extensions = ["pdf"]
     pixbuf_cache = Cache(10)
 
@@ -290,6 +294,7 @@ class PDFFile(ImageFile):
         return pixbuf
 
 class VideoFile(ImageFile):
+    description = "video"
     valid_extensions = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
     video_cache = Cache(10)
 
@@ -338,6 +343,7 @@ class VideoFile(ImageFile):
         return popen.pid
 
 class GIFFile(ImageFile):
+    description = "gif"
     valid_extensions = ["gif"]
     pixbuf_anim_cache = Cache(10)
     anim_toggle = False
@@ -1599,6 +1605,16 @@ def check_directories(args):
                       (dirpath, len(filenames))
             elif not dirnames and not filenames:
                 print "'%s': empty" % (dirpath)
+
+def print_stats(files):
+    files = map(FileFactory.create, files)
+    counter = defaultdict(lambda:0)
+
+    for file in files:
+        counter[file.description] += 1
+
+    for type in counter:
+        print "'%s': %d files" % (type, counter[type])
         
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
     # XXX linux-only
@@ -1615,6 +1631,7 @@ def main():
 
     parser.add_option("-r", "--recursive", action="store_true", default=False)
     parser.add_option("-c", "--check", action="store_true", default=False)
+    parser.add_option("-s", "--stats", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
     parser.add_option("", "--allow-images", action="store_true", default=False)
@@ -1637,6 +1654,10 @@ def main():
         files, start_file = get_files_from_args_recursive(args)
     else:
         files, start_file = get_files_from_args(args)
+
+    if options.stats:
+        print_stats(files)
+        return
 
     try:
         app = ViewerApp(files, start_file, options.base_dir)
