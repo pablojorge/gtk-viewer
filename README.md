@@ -36,6 +36,10 @@ If an identical file is located in the selected target dir (a file with the same
 
 If a file is moved, auto-renamed or deleted, the action will be displayed in the status area, and can be undone by pressing the 'u' key. If you just want to repeat the last action (moving the current file to the last selected dir), you can press the '.' or 'Enter' key. 
 
+## Requirements
+
+* __pdfimages__ ("xpdf-tools" port in Macports)
+
 ## Features summary
 
 ### File types support

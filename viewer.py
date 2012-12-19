@@ -20,7 +20,9 @@ import datetime
 
 from collections import defaultdict
 
-# TODO:
+# TODO Support for EPub files
+# TODO Split in modules
+# TODO Asynchronous loading of images
 #
 #  Funcionalidad:
 #
@@ -183,34 +185,13 @@ class File:
         self.filename = new_name
 
     def trash(self):
-        gfile = gio.File(path=self.filename)
-        gfile.trash()
+        trash(self.filename)
 
     def untrash(self):
-        # XXX linux-only
-        trash_dir = os.getenv("HOME") + "/.local/share/Trash"
-        info_dir = trash_dir + "/info"
-        files_dir = trash_dir + "/files"
-        
-        info_files = glob.glob(info_dir + "/*")
-        
-        for info_file in info_files:
-            with open(info_file, "r") as info:
-                lines = info.readlines()
-            for line in lines:
-                if line.startswith("Path="):
-                    path = line[line.index("=")+1:-1]
-                    if path == os.path.abspath(self.filename):
-                        trashed_file = info_file.replace(info_dir, files_dir)
-                        trashed_file = trashed_file.replace(".trashinfo", "")
-                        os.unlink(info_file)
-                        shutil.move(trashed_file, self.filename)
-                        return
-        
-        raise Exception("Couldn't find '%s' in trash" % self.filename)
+        untrash(self.filename)
 
     def external_open(self):
-        execute(["xdg-open", self.filename])
+        external_open(self.filename)
 
     def embedded_open(self, xid):
         pass
@@ -1353,6 +1334,7 @@ class ViewerApp:
             "z"           : self.undo_last,
             "s"           : self.toggle_star,
             "Delete"      : self.delete_image,
+            "k"           : self.delete_image,
             "d"           : self.sort_by_date_asc,
             "D"           : self.sort_by_date_desc,
             "n"           : self.sort_by_name_asc,
@@ -1615,9 +1597,56 @@ def print_stats(files):
 
     for type in counter:
         print "'%s': %d files" % (type, counter[type])
-        
+
+### Multi-platform functions:        
+def os_switch(functions):
+    os_name = os.uname()[0]
+
+    if os_name in functions:
+        function, args = functions[os_name]
+        return function(*args)
+    else:
+        raise Exception("%s: Unsupported system" % (os_name))
+
+def external_open(filename):
+    return os_switch({
+         'Linux': (external_open_linux, (filename,)),
+         'Darwin': (external_open_macosx, (filename,))
+    })
+
 def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
-    # XXX linux-only
+    return os_switch({
+         'Linux': (get_process_memory_usage_linux, (pid, pagesize)),
+         'Darwin': (get_process_memory_usage_macosx, (pid,))
+    })
+
+def trash(filename):
+    return os_switch({
+         'Linux': (trash_linux, (filename,)),
+         # XXX Darwin support for trash
+    })
+
+def untrash(filename):
+    return os_switch({
+         'Linux': (untrash_linux, (filename,)),
+         # XXX Darwin support for untrash
+    })
+
+### Mac OS X specific functions:
+def external_open_macosx(filename):
+    execute(["open", filename])
+
+def get_process_memory_usage_macosx(pid):
+    output = execute(["ps", "-v", "-p", str(pid)])
+    lines = output.split('\n')
+    rss, vsize = filter(lambda x:x, lines[1].split(' '))[6:8]
+    return (int(rss) * 1024, int(vsize) * 1024)
+
+### Linux specific functions:
+def external_open_linux(filename):
+    execute(["xdg-open", filename])
+
+def get_process_memory_usage_linux(pid, pagesize):
     with open("/proc/%i/stat" % pid) as statfile:
         stat = statfile.read().split(' ')
 
@@ -1625,6 +1654,34 @@ def get_process_memory_usage(pid=os.getpid(), pagesize=4096):
         vsize = int(stat[22])
 
         return (rss, vsize)
+
+def trash_linux(filename):
+    gfile = gio.File(path=filename)
+    gfile.trash()
+
+def untrash_linux(filename):
+    trash_dir = os.getenv("HOME") + "/.local/share/Trash"
+    info_dir = trash_dir + "/info"
+    files_dir = trash_dir + "/files"
+    
+    info_files = glob.glob(info_dir + "/*")
+    
+    for info_file in info_files:
+        with open(info_file, "r") as info:
+            lines = info.readlines()
+        for line in lines:
+            if line.startswith("Path="):
+                path = line[line.index("=")+1:-1]
+                if path == os.path.abspath(filename):
+                    trashed_file = info_file.replace(info_dir, files_dir)
+                    trashed_file = trashed_file.replace(".trashinfo", "")
+                    os.unlink(info_file)
+                    shutil.move(trashed_file, filename)
+                    return
+    
+    raise Exception("Couldn't find '%s' in trash" % self.filename)
+
+### Main
 
 def main():
     parser = optparse.OptionParser(usage="usage: %prog [options] FILE...")
