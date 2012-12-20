@@ -50,6 +50,7 @@ It supports previewing the following kind of files:
 * Animated GIFs
 * Video (.avi, .mp4, .flv, .wmv, .mpg, .mov, .m4v)
 * PDFs
+* EPUBs
 
 ### Actions
 

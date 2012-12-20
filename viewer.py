@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import sys
 import signal
 import string
 
@@ -17,10 +16,12 @@ import shutil
 import optparse
 import subprocess
 import datetime
+import zipfile
+import re
 
+from xml.dom import minidom
 from collections import defaultdict
 
-# TODO Support for EPub files
 # TODO Split in modules
 # TODO Asynchronous loading of images
 #
@@ -242,6 +243,15 @@ class ImageFile(File):
         return ImageDimensions(self.get_pixbuf().get_width(), 
                                self.get_pixbuf().get_height())
 
+    def get_empty_pixbuf(self):
+        pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
+                                has_alpha=False, 
+                                bits_per_sample=8, 
+                                width=1, 
+                                height=1)
+        pixbuf.fill(0)
+        return pixbuf
+
 class PDFFile(ImageFile):
     description = "pdf"
     valid_extensions = ["pdf"]
@@ -266,13 +276,74 @@ class PDFFile(ImageFile):
                 continue
 
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
-        pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
-                                has_alpha=False, 
-                                bits_per_sample=8, 
-                                width=1, 
-                                height=1)
-        pixbuf.fill(0)
-        return pixbuf
+        return self.get_empty_pixbuf()
+
+class EPUBFile(ImageFile):
+    description = "epub"
+    valid_extensions = ["epub"]
+    pixbuf_cache = Cache(10)
+
+    @cached(pixbuf_cache)
+    def get_pixbuf(self):
+        cover = self.get_cover()
+
+        if cover:
+            stream = gio.memory_input_stream_new_from_data(cover.read())
+            return gtk.gdk.pixbuf_new_from_stream(stream)
+        else:
+            print "Warning: unable to preview EPUB file '%s'" % self.get_basename()
+            return self.get_empty_pixbuf()
+
+    def get_cover(self):
+        epub = zipfile.ZipFile(self.filename, "r")
+
+        for strategy in [self.get_cover_from_manifest,
+                         self.get_cover_by_filename]:
+            # Try to obtain the cover with the current method:
+            cover_path = strategy(epub)
+
+            # If succesfull, extract the cover and build the pixbuf:
+            if cover_path:
+                return epub.open(cover_path)
+        
+        return None
+
+    def get_cover_from_manifest(self, epub):
+        img_ext_regex = re.compile("^.*\.(jpg|jpeg|png)$")
+
+        # open the main container
+        container = epub.open("META-INF/container.xml")
+        container_root = minidom.parseString(container.read())
+
+        # locate the rootfile
+        elem = container_root.getElementsByTagName("rootfile")[0]
+        rootfile_path = elem.getAttribute("full-path")
+
+        # open the rootfile
+        rootfile = epub.open(rootfile_path)
+        rootfile_root = minidom.parseString(rootfile.read())
+
+        # find the manifest element
+        manifest = rootfile_root.getElementsByTagName("manifest")[0]
+        for item in manifest.getElementsByTagName("item"):
+            item_id = item.getAttribute("id")
+            item_href = item.getAttribute("href")
+            if (("cover" in item_id or "fcvi" in item_id) and 
+                img_ext_regex.match(item_href.lower())):
+                cover_path = os.path.join(os.path.dirname(rootfile_path), 
+                                          item_href)
+                return cover_path
+
+        return None
+
+    def get_cover_by_filename(self, epub):
+        cover_regex = re.compile(".*cover.*\.(jpg|jpeg|png)")
+
+        for fileinfo in epub.filelist:
+            if cover_regex.match(os.path.basename(fileinfo.filename).lower()):
+                return fileinfo.filename
+
+        return None
 
 class VideoFile(ImageFile):
     description = "video"
@@ -353,7 +424,7 @@ class FileFactory:
 
     @classmethod
     def create(cls, filename):
-        for cls in PDFFile, VideoFile, GIFFile:
+        for cls in PDFFile, EPUBFile, VideoFile, GIFFile:
             for ext in cls.valid_extensions:
                 if filename.lower().endswith("." + ext):
                     return cls(filename)
@@ -670,17 +741,16 @@ class FileSelectorDialog:
         img_filter.add_pixbuf_formats()
         self.chooser.add_filter(img_filter)
 
-        pdf_filter = gtk.FileFilter()
-        pdf_filter.set_name("PDF Files")
-        for ext in PDFFile.valid_extensions:
-            pdf_filter.add_pattern("*." + ext)
-        self.chooser.add_filter(pdf_filter)
+        self.add_filter("PDF Files", PDFFile.valid_extensions)
+        self.add_filter("EPub Files", EPUBFile.valid_extensions)
+        self.add_filter("Video Files", VideoFile.valid_extensions)
 
-        video_filter = gtk.FileFilter()
-        video_filter.set_name("Video Files")
-        for ext in VideoFile.valid_extensions:
-            video_filter.add_pattern("*." + ext)
-        self.chooser.add_filter(video_filter)
+    def add_filter(self, name, extensions):
+        filter_ = gtk.FileFilter()
+        filter_.set_name(name)
+        for ext in extensions:
+            filter_.add_pattern("*." + ext)
+        self.chooser.add_filter(filter_)
 
     def on_selection_changed(self, chooser):
         filename = chooser.get_preview_filename()
@@ -1505,7 +1575,8 @@ class FileTypeFilter:
         return { "videos" : VideoFile.valid_extensions,
                  "images" : cls.get_image_extensions(),
                  "gifs" : GIFFile.valid_extensions,
-                 "pdfs" : PDFFile.valid_extensions }
+                 "pdfs" : PDFFile.valid_extensions,
+                 "epubs" : EPUBFile.valid_extensions }
 
     @classmethod
     def get_image_extensions(cls):
@@ -1694,6 +1765,7 @@ def main():
     parser.add_option("", "--allow-images", action="store_true", default=False)
     parser.add_option("", "--allow-gifs", action="store_true", default=False)
     parser.add_option("", "--allow-pdfs", action="store_true", default=False)
+    parser.add_option("", "--allow-epubs", action="store_true", default=False)
     parser.add_option("", "--allow-videos", action="store_true", default=False)
 
     options, args = parser.parse_args()
