@@ -10,14 +10,12 @@ from filescanner import (FileTypeFilter,
 from viewerapp import ViewerApp
 
 # TODO Asynchronous loading of images
-#
-#  Funcionalidad:
-#
-#  * soporte para copiar ademas de mover
-#  * hacer un menu y un toolbox
-#  * apretar ESC en fullscreen saca de fullscreen (cambiar dinamicamente
-#    los bindings, con un get que devuleve bindings de acuerdo al modo)
-#  * hacer un help
+# TODO Support for delete / undelete in Mac OS X
+# TODO Improve help dialog
+# TODO Thumbnail view (complete, as a bar or both)
+# TODO Pinbar (select dir, a file from that dir and assign to pos N)
+# TODO Support for copying files
+# TODO Implement a menu bar and a toolbox
 
 def check_directories(args):
     for arg in args:

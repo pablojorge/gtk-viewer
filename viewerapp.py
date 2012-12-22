@@ -426,7 +426,7 @@ class ViewerApp:
 
     ## Key Bindings
     def get_key_bindings(self):
-        return {
+        bindings = {
             ## Generic actions:
             "q"           : self.quit_app,
             "Escape"      : self.quit_app,
@@ -473,6 +473,11 @@ class ViewerApp:
             "f"           : self.flip_horizontal,
             "F"           : self.flip_vertical,
         }
+
+        if self.fullscreen:
+            bindings["Escape"] = self.toggle_fullscreen
+
+        return bindings
 
     ## action handlers
     def quit_app(self):
