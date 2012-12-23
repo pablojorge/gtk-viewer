@@ -75,11 +75,19 @@ class ThumbnailViewer(ImageViewer):
         self.th_size = th_size
         self.hidden = False
 
+    def set_size(self, size):
+        self.th_size = size
+        self.redraw()
+
     def load(self, image_file):
         self.load_at_size(image_file, self.th_size, self.th_size)
 
     def redraw(self):
         if self.hidden:
+            return
+
+        if not self.image_file:
+            self.fill()
             return
 
         dimensions = self.image_file.get_dimensions()

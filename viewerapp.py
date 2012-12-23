@@ -151,12 +151,13 @@ class WidgetFactory:
         return ebox
 
 class Pinbar:
-    TH_SIZE = 150
+    THUMB_COUNT = 10
 
     def __init__(self, main_app):
         self.main_app = main_app
 
         self.hidden = False
+        self.pinbar_size = None
         self.thumb_array = []
         self.target_array = []
 
@@ -164,12 +165,13 @@ class Pinbar:
 
         # Pinbar hbox
         self.hbox = gtk.HBox(True, 0)
+        self.hbox.connect("size-allocate", self.on_size_allocate)
 
-        for i in range(10):
+        for i in range(self.THUMB_COUNT):
             tvbox = gtk.VBox(False, 0)
-            self.hbox.pack_start(tvbox, False, False, 2)
+            self.hbox.pack_start(tvbox, False, False, 1)
 
-            th = ThumbnailViewer(150)
+            th = ThumbnailViewer(1)
             self.thumb_array.append(th)
             self.target_array.append(None)
             th.fill()
@@ -181,13 +183,23 @@ class Pinbar:
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
-            label.set_markup("<span underline='single'>%s</span>" % ((i+1)%10))
+            label.set_markup("<span underline='single'>%s</span>" % ((i+1) % self.THUMB_COUNT))
 
             ebox = factory.get_event_box(child=label,
                                          bg_color=None,
                                          on_button_press_event=self.on_th_press(i),
                                          on_scroll_event=lambda: None)
-            tvbox.pack_start(ebox, False, False, 2)
+            tvbox.pack_start(ebox, False, False, 1)
+
+    def on_size_allocate(self, widget, event, data=None):
+        allocation = self.hbox.allocation
+        width, height = allocation.width, allocation.height
+
+        if self.pinbar_size != (width, height):
+            self.pinbar_size = (width, height)
+
+            for thumb in self.thumb_array:
+                thumb.set_size((width-(self.THUMB_COUNT+1)) / self.THUMB_COUNT)
 
     def on_th_press(self, index):
         def handler(widget, event, data=None):
@@ -599,8 +611,8 @@ class ViewerApp:
         if self.pinbar.is_active():
             pinbar_bindings = {}
 
-            for i in range(10):
-                pinbar_bindings[str((i+1)%10)] = self.pinbar.on_key_press(i)
+            for i in range(Pinbar.THUMB_COUNT):
+                pinbar_bindings[str((i+1) % Pinbar.THUMB_COUNT)] = self.pinbar.on_key_press(i)
 
             bindings.update(pinbar_bindings)
 
