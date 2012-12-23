@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-python2.7 $(dirname $0)/main.py $@
+python2.7 $(dirname $0)/main.py "$@"

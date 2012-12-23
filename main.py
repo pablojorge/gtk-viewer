@@ -13,7 +13,6 @@ from viewerapp import ViewerApp
 # TODO Support for delete / undelete in Mac OS X
 # TODO Improve help dialog
 # TODO Thumbnail view (complete, as a bar or both)
-# TODO Pinbar (select dir, a file from that dir and assign to pos N)
 # TODO Support for copying files
 # TODO Implement a menu bar and a toolbox
 

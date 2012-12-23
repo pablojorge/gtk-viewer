@@ -89,6 +89,18 @@ class ThumbnailViewer(ImageViewer):
 
         self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
 
+    def fill(self):
+        pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
+                                has_alpha=False, 
+                                bits_per_sample=8, 
+                                width=self.th_size, 
+                                height=self.th_size)
+        pixbuf.fill(0)
+        self.widget.set_from_pixbuf(pixbuf)
+
+    def set_tooltip_text(self, text):
+        self.widget.set_tooltip_text(text)
+
     def hide(self):
         self.hidden = True
         self.widget.hide()

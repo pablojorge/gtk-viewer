@@ -3,10 +3,13 @@ import signal
 
 import gtk
 
+from filefactory import FileFactory
+
 from imagefile import Size
 from filemanager import Action, FileManager
 from dialogs import (OpenDialog, InfoDialog, QuestionDialog, HelpDialog,
-                     BasedirSelectorDialog, TargetSelectorDialog, RenameDialog)
+                     FileSelectorDialog, BasedirSelectorDialog, TargetSelectorDialog, 
+                     RenameDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 
 from filescanner import get_files_from_args
@@ -140,8 +143,112 @@ class WidgetFactory:
         ebox.connect("button-press-event", on_button_press_event)
         ebox.connect("scroll-event", on_scroll_event)
         ebox.add(child)
-        ebox.modify_bg(gtk.STATE_NORMAL, gtk.gdk.color_parse(bg_color))
+
+        if bg_color:
+            color = gtk.gdk.color_parse(bg_color)
+            ebox.modify_bg(gtk.STATE_NORMAL, color)
+
         return ebox
+
+class Pinbar:
+    TH_SIZE = 150
+
+    def __init__(self, main_app):
+        self.main_app = main_app
+
+        self.hidden = False
+        self.thumb_array = []
+        self.target_array = []
+
+        factory = WidgetFactory()
+
+        # Pinbar hbox
+        self.hbox = gtk.HBox(True, 0)
+
+        for i in range(10):
+            tvbox = gtk.VBox(False, 0)
+            self.hbox.pack_start(tvbox, False, False, 2)
+
+            th = ThumbnailViewer(150)
+            self.thumb_array.append(th)
+            self.target_array.append(None)
+            th.fill()
+
+            ebox = factory.get_event_box(child=th.get_widget(),
+                                         bg_color=None,
+                                         on_button_press_event=self.on_th_press(i),
+                                         on_scroll_event=lambda: None)
+            tvbox.pack_start(ebox, True, False, 0)
+            
+            label = gtk.Label()
+            label.set_markup("<span underline='single'>%s</span>" % ((i+1)%10))
+
+            ebox = factory.get_event_box(child=label,
+                                         bg_color=None,
+                                         on_button_press_event=self.on_th_press(i),
+                                         on_scroll_event=lambda: None)
+            tvbox.pack_start(ebox, False, False, 2)
+
+    def on_th_press(self, index):
+        def handler(widget, event, data=None):
+            if event.button == 1:
+                self.send_to_target(index)
+            else:
+                self.associate_target(index)
+
+        return handler
+
+    def on_key_press(self, index):
+        def handler():
+            self.send_to_target(index)
+        return handler
+
+    def send_to_target(self, index):
+        target = self.target_array[index]
+
+        if not target:
+            self.associate_target(index)
+            target = self.target_array[index]
+            if not target:
+                return
+
+        self.main_app.move_current(target)
+
+    def associate_target(self, index):
+        def on_file_selected(selection):
+            imgfile = FileFactory.create(selection)
+            dirname = imgfile.get_dirname()
+
+            thumb = self.thumb_array[index]
+            thumb.load(imgfile)
+            thumb.set_tooltip_text(dirname)
+
+            self.target_array[index] = dirname
+
+        FileSelectorDialog("Select target dir", 
+                           self.main_app.get_base_dir(),
+                           None, 
+                           on_file_selected).run()
+
+    def get_widget(self):
+        return self.hbox
+
+    def hide(self):
+        self.hidden = True
+        self.get_widget().hide()
+
+    def show(self):
+        self.hidden = False
+        self.get_widget().show()
+
+    def toggle_visible(self):
+        if self.hidden:
+            self.show()
+        else:
+            self.hide()
+
+    def is_active(self):
+        return self.hidden != True
 
 class ViewerApp:
     DEF_WIDTH = 640
@@ -171,9 +278,14 @@ class ViewerApp:
                                          on_destroy=self.on_destroy,
                                          on_key_press_event=self.on_key_press_event)
 
+        # Main vbox of the window (contains pinbar hbox, viewer hbox and status bar hbox)
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
 
+        self.pinbar = Pinbar(self)
+        vbox.pack_start(self.pinbar.get_widget(), False, False, 0)
+
+        # Viewer hbox
         hbox = gtk.HBox(False, 0)
         vbox.pack_start(hbox, True, True, 0)
 
@@ -233,6 +345,8 @@ class ViewerApp:
 
         self.status_bar.pack_end(self.file_index, False, False, 10)
 
+        # Window composition end
+
         if files:
             self.set_files(files, start_file)
         else:
@@ -243,7 +357,11 @@ class ViewerApp:
             if self.file_manager.empty():
                 raise Exception("No files selected!")
 
+        # Show main window AFTER obtaining file list
         self.window.show_all()
+
+        # But start hiding the pinbar
+        self.pinbar.hide()
 
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)
@@ -431,6 +549,7 @@ class ViewerApp:
             "q"           : self.quit_app,
             "Escape"      : self.quit_app,
             "F1"          : self.show_help,
+            "p"           : self.toggle_pinbar,
             "F11"         : self.toggle_fullscreen,
             "F12"         : self.toggle_thumbnails,
 
@@ -477,6 +596,14 @@ class ViewerApp:
         if self.fullscreen:
             bindings["Escape"] = self.toggle_fullscreen
 
+        if self.pinbar.is_active():
+            pinbar_bindings = {}
+
+            for i in range(10):
+                pinbar_bindings[str((i+1)%10)] = self.pinbar.on_key_press(i)
+
+            bindings.update(pinbar_bindings)
+
         return bindings
 
     ## action handlers
@@ -502,6 +629,9 @@ class ViewerApp:
         self.th_left.toggle_visible()
         self.th_right.toggle_visible()
 
+    def toggle_pinbar(self):
+        self.pinbar.toggle_visible()
+
     def first_image(self):
         self.file_manager.go_first()
 
@@ -520,13 +650,14 @@ class ViewerApp:
     def prev_image(self):
         self.file_manager.go_backward(1)
 
-    def show_selector(self):
+    def get_base_dir(self):
         if self.base_dir:
-            initial_dir = self.base_dir
+            return self.base_dir
         else:
-            initial_dir = self.file_manager.get_current_file().get_dirname()
+            return self.file_manager.get_current_file().get_dirname()
 
-        selector = TargetSelectorDialog(initial_dir=initial_dir, 
+    def show_selector(self):
+        selector = TargetSelectorDialog(initial_dir=self.get_base_dir(), 
                                         last_targets=self.last_targets, 
                                         callback=self.on_target_selected)
         selector.run()
@@ -542,11 +673,7 @@ class ViewerApp:
         renamer.run()
 
     def select_base_dir(self):
-        if self.base_dir:
-            initial_dir = self.base_dir
-        else:
-            initial_dir = self.file_manager.get_current_file().get_dirname()
-        selector = BasedirSelectorDialog(initial_dir=initial_dir, 
+        selector = BasedirSelectorDialog(initial_dir=self.get_base_dir(), 
                                          last_targets=[], 
                                          callback=self.on_base_dir_selected)
         selector.run()
