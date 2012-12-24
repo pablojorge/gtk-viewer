@@ -170,19 +170,14 @@ class RenameDialog(FileSelectorDialog):
                                           initial_filename=initial_filename, 
                                           callback=callback)
 
-class HelpDialog:
-    def __init__(self, parent, bindings):
-        self.window = gtk.Dialog(title="Help", parent=parent, flags=gtk.DIALOG_MODAL)
+class AboutDialog:
+    def __init__(self, parent):
+        self.window = gtk.Dialog(title="About", parent=parent, flags=gtk.DIALOG_MODAL)
 
         label = gtk.Label()
-        label.set_text(self.__build_help(bindings))
+        label.set_markup("<span size=\"large\">Viewer</span>\n\n" +
+                         "Simple Multimedia Viewer")
         self.window.action_area.pack_start(label, True, True, 5)
-
-    def __build_help(self, bindings):
-        actions = []
-        for key, action in bindings.iteritems():
-            actions.append("%s -> %s" % (key, action.__name__))
-        return "\n".join(actions)
 
     def show(self):
         self.window.show_all()

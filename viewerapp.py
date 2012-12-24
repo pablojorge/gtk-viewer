@@ -7,7 +7,7 @@ from filefactory import FileFactory
 
 from imagefile import Size
 from filemanager import Action, FileManager
-from dialogs import (OpenDialog, InfoDialog, QuestionDialog, HelpDialog,
+from dialogs import (OpenDialog, InfoDialog, QuestionDialog, AboutDialog,
                      FileSelectorDialog, BasedirSelectorDialog, TargetSelectorDialog, 
                      RenameDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
@@ -149,6 +149,45 @@ class WidgetFactory:
             ebox.modify_bg(gtk.STATE_NORMAL, color)
 
         return ebox
+
+    def get_menu_bar(self, window, menus):
+        menu_bar = gtk.MenuBar()
+
+        accel_group = gtk.AccelGroup()
+        window.add_accel_group(accel_group)
+
+        for menu in menus:
+            gmenu = gtk.Menu()
+            gitem = gtk.MenuItem(menu["text"])
+            gitem.set_submenu(gmenu)
+
+            for item in menu["items"]:
+                # Create menu item depending on type:
+                if item.has_key("text"):
+                    mitem = gtk.MenuItem(item["text"])
+                elif item.has_key("stock"):
+                    mitem = gtk.ImageMenuItem(item["stock"], accel_group)
+                elif item.has_key("separator"):
+                    mitem = gtk.SeparatorMenuItem()
+                elif item.has_key("toggle"):
+                    mitem = gtk.CheckMenuItem(item["toggle"])
+                    if item.has_key("active") and item["active"]:
+                        mitem.set_active(True)
+
+                if item.has_key("accel"):
+                    key, mod = gtk.accelerator_parse(item["accel"])
+                    mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
+
+                # Connect handler if available:
+                if item.has_key("handler"):
+                    mitem.connect("activate", item["handler"])
+
+                # Add it to the menu:
+                gmenu.append(mitem)
+
+            menu_bar.append(gitem)
+
+        return menu_bar
 
 class Pinbar:
     THUMB_COUNT = 10
@@ -294,6 +333,134 @@ class ViewerApp:
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
 
+        # Menubar
+        # XXX clean handlers
+        # XXX proper behavior of "embedded player"
+        # XXX proper behavior of "fullscreen"
+        # XXX proper behavior of "zoom to fit"
+        # XXX proper behavior of "view pinbar"
+        # XXX proper behavior of "Right/Left"
+        # XXX submenu for sort (name/date, ascending/descending)
+        # XXX disable undo when stack is empty
+        menus = [{"text" : "_File",
+                  "items" : [{"stock" : gtk.STOCK_OPEN,
+                              "handler" : lambda _: self.open_file()},
+                             {"separator" : True},
+                             {"text" : "Rename",
+                              "accel" : "F2",
+                              "handler" : lambda _: self.rename_current()},
+                             {"stock" : gtk.STOCK_DELETE,
+                              "accel" : "D",
+                              "handler" : lambda _: self.delete_image()},
+                             {"separator" : True},
+                             {"text" : "Open in external viewer",
+                              "accel" : "X",
+                              "handler" : lambda _: self.external_open()},
+                             {"toggle" : "Enable embedded player",
+                              "accel" : "E",
+                              "handler" : lambda _: self.embedded_open()},
+                             {"separator" : True},
+                             {"stock" : gtk.STOCK_QUIT,
+                              "handler" : lambda _: self.quit_app()}]},
+                 {"text" : "_Edit",
+                  "items" : [{"stock" : gtk.STOCK_UNDO,
+                              "accel" : "<Control>Z",
+                              "handler" : lambda _: self.undo_last()},
+                             {"separator" : True},
+                             {"text" : "Star/unstar image",
+                              "accel" : "S",
+                              "handler" : lambda _: self.toggle_star()},
+                             {"separator" : True},
+                             {"text" : "Select base directory",
+                              "accel" : "B",
+                              "handler" : lambda _: self.select_base_dir()},
+                             {"text" : "Move to target",
+                              "accel" : "M",
+                              "handler" : lambda _: self.show_selector()},
+                             {"text" : "Reuse last target",
+                              "accel" : "Return",
+                              "handler" : lambda _: self.repeat_selection()}]},
+                 {"text" : "_View",
+                  "items" : [{"toggle" : "Show thumbnails",
+                              "active" : True,
+                              #"accel" : "F12",
+                              "handler" : lambda _: self.toggle_thumbnails()},
+                             {"separator" : True},
+                             {"stock" : gtk.STOCK_ZOOM_100,
+                              "accel" : "0",
+                              "handler" : lambda _: self.zoom_100()},
+                             {"stock" : gtk.STOCK_ZOOM_FIT,
+                              "accel" : "1",
+                              "handler" : lambda _: self.zoom_fit()},
+                             {"stock" : gtk.STOCK_ZOOM_IN,
+                              # "accel" : "<Control>+", # XXX
+                              "handler" : lambda _: None},
+                             {"stock" : gtk.STOCK_ZOOM_OUT,
+                              # "accel" : "<Control>-", # XXX
+                              "handler" : lambda _: None},
+                             {"separator" : True},
+                             {"stock" : gtk.STOCK_FULLSCREEN,
+                              "accel" : "F11",
+                              "handler" : lambda _: self.toggle_fullscreen()}]},
+                 {"text" : "_Image",
+                  "items" : [{"text" : "Rotate clockwise",
+                              "accel" : "R",
+                              "handler" : lambda _: self.rotate_c()},
+                             {"text" : "Rotate counter-clockwise",
+                              "accel" : "<Control>R",
+                              "handler" : lambda _: self.rotate_cc()},
+                             {"separator" : True},
+                             {"text" : "Flip horizontal",
+                              "accel" : "F",
+                              "handler" : lambda _: self.flip_horizontal()},
+                             {"text" : "Flip vertical",
+                              "accel" : "<Control>F",
+                              "handler" : lambda _: self.flip_vertical()}]},
+                 {"text" : "_Go",
+                  "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
+                              "accel" : "Home",
+                              "handler" : lambda _: self.first_image()},
+                             {"stock" : gtk.STOCK_GOTO_LAST,
+                              "accel" : "End",
+                              "handler" : lambda _: self.last_image()},
+                             {"separator" : True},
+                             {"stock" : gtk.STOCK_GO_FORWARD,
+                              "accel" : "<Alt>Right",
+                              "handler" : lambda _: self.next_image()},
+                             {"stock" : gtk.STOCK_GO_BACK,
+                              "accel" : "<Alt>Left",
+                              "handler" : lambda _: self.prev_image()},
+                             {"separator" : True},
+                             {"text" : "Jump forward",
+                              "accel" : "<Control>Right",
+                              "handler" : lambda _: self.jump_forward()},
+                             {"stock" : "Jump back",
+                              "accel" : "<Control>Left",
+                              "handler" : lambda _: self.jump_backward()},
+                             {"separator" : True},
+                             {"text" : "Sort by date ascending",
+                              "accel" : "D",
+                              "handler" : lambda _: self.sort_by_date_asc()},
+                             {"stock" : "Sort by date descending",
+                              "accel" : "<Control>D",
+                              "handler" : lambda _: self.sort_by_date_desc()},
+                             {"text" : "Sort by name ascending",
+                              "accel" : "N",
+                              "handler" : lambda _: self.sort_by_name_asc()},
+                             {"stock" : "Sort by name descending",
+                              "accel" : "<Control>N",
+                              "handler" : lambda _: self.sort_by_name_desc()}]},
+                 {"text" : "_Pinbar",
+                  "items" : [{"toggle" : "Show pinbar",
+                              "handler" : lambda _: self.toggle_pinbar()},]},
+                 {"text" : "_Help",
+                  "items" : [{"stock" : gtk.STOCK_ABOUT,
+                              "handler" : lambda _: self.show_about()}]}]
+
+        self.menu_bar = factory.get_menu_bar(self.window, menus)
+        vbox.pack_start(self.menu_bar, False, False, 0)
+
+        # Pinbar
         self.pinbar = Pinbar(self)
         vbox.pack_start(self.pinbar.get_widget(), False, False, 0)
 
@@ -558,51 +725,11 @@ class ViewerApp:
     def get_key_bindings(self):
         bindings = {
             ## Generic actions:
-            "q"           : self.quit_app,
             "Escape"      : self.quit_app,
-            "F1"          : self.show_help,
-            "p"           : self.toggle_pinbar,
-            "F11"         : self.toggle_fullscreen,
-            "F12"         : self.toggle_thumbnails,
 
             ## Files navigation:
-            "Home"        : self.first_image,
-            "End"         : self.last_image,
-            "Page_Down"   : self.jump_forward,
-            "Page_Up"     : self.jump_backward,
-            "space"       : self.next_image,
             "Right"       : self.next_image,
-            "BackSpace"   : self.prev_image,
             "Left"        : self.prev_image,
-
-            ## Files manipulation:
-            "Down"        : self.show_selector,
-            "Tab"         : self.show_selector,
-            "l"           : self.show_selector,
-            "o"           : self.open_file,
-            "F2"          : self.rename_current,
-            "F3"          : self.select_base_dir,
-            "period"      : self.repeat_selection,
-            "Return"      : self.repeat_selection,
-            "u"           : self.undo_last,
-            "z"           : self.undo_last,
-            "s"           : self.toggle_star,
-            "Delete"      : self.delete_image,
-            "k"           : self.delete_image,
-            "d"           : self.sort_by_date_asc,
-            "D"           : self.sort_by_date_desc,
-            "n"           : self.sort_by_name_asc,
-            "N"           : self.sort_by_name_desc,
-            "x"           : self.external_open,
-            "e"           : self.embedded_open,
-
-            ## Image manipulation:
-            "1"           : self.zoom_100,
-            "0"           : self.zoom_fit,
-            "r"           : self.rotate_c,
-            "R"           : self.rotate_cc,
-            "f"           : self.flip_horizontal,
-            "F"           : self.flip_vertical,
         }
 
         if self.fullscreen:
@@ -623,17 +750,19 @@ class ViewerApp:
         self.stop_embedded_app()
         gtk.Widget.destroy(self.window)
 
-    def show_help(self):
-        helpd = HelpDialog(self.window, self.get_key_bindings())
-        helpd.show()
+    def show_about(self):
+        about = AboutDialog(self.window)
+        about.show()
 
     def toggle_fullscreen(self):
         if not self.fullscreen:
             self.window.fullscreen()
+            self.menu_bar.hide()
             self.status_bar.hide()
             self.fullscreen = True
         else:
             self.window.unfullscreen()
+            self.menu_bar.show()
             self.status_bar.show()
             self.fullscreen = False
 
