@@ -249,9 +249,16 @@ class Pinbar:
 
         return handler
 
-    def on_key_press(self, index):
-        def handler():
-            self.send_to_target(index)
+    def on_send_to(self, index):
+        def handler(_):
+            if self.is_active():
+                self.send_to_target(index)
+        return handler
+
+    def on_associate(self, index):
+        def handler(_):
+            if self.is_active():
+                self.associate_target(index)
         return handler
 
     def send_to_target(self, index):
@@ -333,6 +340,15 @@ class ViewerApp:
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
 
+        # Must be instatiated first to associate the accelerators:
+        self.pinbar = Pinbar(self)
+
+        pinbar_send = lambda i: {"text" : "Send to bucket %i" % ((i+1)%10),
+                                 "accel" : "<Alt>%i" % ((i+1)%10),
+                                 "handler" : self.pinbar.on_send_to(i)}
+        pinbar_assoc = lambda i: {"text" : "Associate bucket %i" % ((i+1)%10),
+                                  "accel" : "<Control>%i" % ((i+1)%10),
+                                  "handler" : self.pinbar.on_send_to(i)}
         # Menubar
         # XXX clean handlers
         # XXX proper behavior of "embedded player"
@@ -452,7 +468,17 @@ class ViewerApp:
                               "handler" : lambda _: self.sort_by_name_desc()}]},
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
-                              "handler" : lambda _: self.toggle_pinbar()},]},
+                              "handler" : lambda _: self.toggle_pinbar()},
+                             {"separator" : True},
+                             pinbar_send(0), pinbar_send(1), pinbar_send(2),
+                             pinbar_send(3), pinbar_send(4), pinbar_send(5),
+                             pinbar_send(6), pinbar_send(7), pinbar_send(8),
+                             pinbar_send(9),
+                             {"separator" : True},
+                             pinbar_assoc(0), pinbar_assoc(1), pinbar_assoc(2),
+                             pinbar_assoc(3), pinbar_assoc(4), pinbar_assoc(5),
+                             pinbar_assoc(6), pinbar_assoc(7), pinbar_assoc(8),
+                             pinbar_assoc(9)]},
                  {"text" : "_Help",
                   "items" : [{"stock" : gtk.STOCK_ABOUT,
                               "handler" : lambda _: self.show_about()}]}]
@@ -460,8 +486,7 @@ class ViewerApp:
         self.menu_bar = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
-        # Pinbar
-        self.pinbar = Pinbar(self)
+        # Pinbar (pack it AFTER the menu bar)
         vbox.pack_start(self.pinbar.get_widget(), False, False, 0)
 
         # Viewer hbox
@@ -734,14 +759,6 @@ class ViewerApp:
 
         if self.fullscreen:
             bindings["Escape"] = self.toggle_fullscreen
-
-        if self.pinbar.is_active():
-            pinbar_bindings = {}
-
-            for i in range(Pinbar.THUMB_COUNT):
-                pinbar_bindings[str((i+1) % Pinbar.THUMB_COUNT)] = self.pinbar.on_key_press(i)
-
-            bindings.update(pinbar_bindings)
 
         return bindings
 
