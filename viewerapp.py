@@ -175,7 +175,11 @@ class WidgetFactory:
                         mitem.set_active(True)
 
                 if item.has_key("accel"):
-                    key, mod = gtk.accelerator_parse(item["accel"])
+                    accel = item["accel"]
+                    if type(accel) is str:
+                        key, mod = gtk.accelerator_parse(item["accel"])
+                    else:
+                        key, mod = accel
                     mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
 
                 # Connect handler if available:
@@ -266,11 +270,8 @@ class Pinbar:
 
         if not target:
             self.associate_target(index)
-            target = self.target_array[index]
-            if not target:
-                return
-
-        self.main_app.move_current(target)
+        else:
+            self.main_app.move_current(target)
 
     def associate_target(self, index):
         def on_file_selected(selection):
@@ -357,13 +358,14 @@ class ViewerApp:
         # XXX proper behavior of "view pinbar"
         # XXX proper behavior of "Right/Left"
         # XXX submenu for sort (name/date, ascending/descending)
+        # XXX submenu for pinbar send to / associate
         # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
                               "handler" : lambda _: self.open_file()},
                              {"separator" : True},
                              {"text" : "Rename",
-                              "accel" : "F2",
+                              "accel" : "<Control>M",
                               "handler" : lambda _: self.rename_current()},
                              {"stock" : gtk.STOCK_DELETE,
                               "accel" : "D",
@@ -377,10 +379,11 @@ class ViewerApp:
                               "handler" : lambda _: self.embedded_open()},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_QUIT,
+                              "accel" : "Q",
                               "handler" : lambda _: self.quit_app()}]},
                  {"text" : "_Edit",
                   "items" : [{"stock" : gtk.STOCK_UNDO,
-                              "accel" : "<Control>Z",
+                              "accel" : "U",
                               "handler" : lambda _: self.undo_last()},
                              {"separator" : True},
                              {"text" : "Star/unstar image",
@@ -394,12 +397,12 @@ class ViewerApp:
                               "accel" : "M",
                               "handler" : lambda _: self.show_selector()},
                              {"text" : "Reuse last target",
-                              "accel" : "Return",
+                              "accel" : (gtk.keysyms.period, 0),
                               "handler" : lambda _: self.repeat_selection()}]},
                  {"text" : "_View",
                   "items" : [{"toggle" : "Show thumbnails",
                               "active" : True,
-                              #"accel" : "F12",
+                              "accel" : "T",
                               "handler" : lambda _: self.toggle_thumbnails()},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_ZOOM_100,
@@ -409,11 +412,11 @@ class ViewerApp:
                               "accel" : "1",
                               "handler" : lambda _: self.zoom_fit()},
                              {"stock" : gtk.STOCK_ZOOM_IN,
-                              # "accel" : "<Control>+", # XXX
-                              "handler" : lambda _: None},
+                              "accel" : (gtk.keysyms.plus, 0),
+                              "handler" : lambda _: self.zoom_in()},
                              {"stock" : gtk.STOCK_ZOOM_OUT,
-                              # "accel" : "<Control>-", # XXX
-                              "handler" : lambda _: None},
+                              "accel" : (gtk.keysyms.minus, 0),
+                              "handler" : lambda _: self.zoom_out()},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_FULLSCREEN,
                               "accel" : "F11",
@@ -468,6 +471,7 @@ class ViewerApp:
                               "handler" : lambda _: self.sort_by_name_desc()}]},
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
+                              "accel" : "P",
                               "handler" : lambda _: self.toggle_pinbar()},
                              {"separator" : True},
                              pinbar_send(0), pinbar_send(1), pinbar_send(2),
@@ -539,14 +543,9 @@ class ViewerApp:
         vbox.pack_start(self.status_bar, False, False, 5)
 
         self.file_info = gtk.Label()
-        self.memory_info = gtk.Label()
-        self.additional_info = gtk.Label()
         self.file_index = gtk.Label()
 
         self.status_bar.pack_start(self.file_info, False, False, 10)
-        self.status_bar.pack_start(self.memory_info, False, False, 10)
-        self.status_bar.pack_start(self.additional_info, False, False, 10)
-
         self.status_bar.pack_end(self.file_index, False, False, 10)
 
         # Window composition end
@@ -709,20 +708,17 @@ class ViewerApp:
         # Markup reference:
         # http://www.gtk.org/api/2.6/pango/PangoMarkupFormat.html
 
-        self.file_info.set_markup("<i>Date:</i> %s\n<i>Size:</i> %s pixels | %s | %d%%\n<i>SHA1:</i> %s" % \
-                                  (image_file.get_mtime(),
-                                   image_file.get_dimensions(),
-                                   image_file.get_filesize(), 
-                                   self.image_viewer.get_zoom_factor(),
-                                   image_file.get_sha1()))
+        file_info = "<i>Date:</i> %s | <i>Dimensions:</i> %s pixels | <i>Size:</i> %s | <i>Zoom:</i> %d%%\n<i>SHA1:</i> %s" % \
+                    (image_file.get_mtime(),
+                     image_file.get_dimensions(),
+                     image_file.get_filesize(), 
+                     self.image_viewer.get_zoom_factor(),
+                     image_file.get_sha1())
 
-        rss, vsize = get_process_memory_usage()
-        self.memory_info.set_markup("<i>RSS:</i> %s\n<i>VSize:</i> %s" % (Size(rss), Size(vsize)))
-
-        additional = "<i>Base directory:</i> <b>%s</b>" % self.base_dir
+        file_info += "\n<i>Base directory:</i> <b>%s</b>" % self.base_dir
 
         if self.last_targets:
-            additional += "\n<i>Last directory:</i> <b>%s</b>" % self.last_targets[0]
+            file_info += "\n<i>Last directory:</i> <b>%s</b>" % self.last_targets[0]
 
         if self.undo_stack:
             last_action = self.undo_stack[-1]
@@ -735,14 +731,18 @@ class ViewerApp:
             if background: span += " background='%s'" % background
             if foreground: span += " foreground='%s'" % foreground
             span += ">%s</span>" % last_action.description
-            additional += "\n<i>Last action:</i> " + span
+            file_info += "\n<i>Last action:</i> " + span
 
-        self.additional_info.set_markup("%s" % additional)
+        file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s" % \
+                     (self.file_manager.get_current_index() + 1, 
+                      self.file_manager.get_list_length(),
+                      self.files_order)
 
-        self.file_index.set_markup("<b><big>%d/%d</big></b>\n<i>Order:</i> %s" % \
-                                   (self.file_manager.get_current_index() + 1, 
-                                    self.file_manager.get_list_length(),
-                                    self.files_order))
+        rss, vsize = get_process_memory_usage()
+        file_index += "\n<i>RSS:</i> %s\n<i>VSize:</i> %s" % (Size(rss), Size(vsize))
+
+        self.file_info.set_markup(file_info)
+        self.file_index.set_markup(file_index)
         self.file_index.set_justify(gtk.JUSTIFY_RIGHT)
     ##
 
@@ -891,6 +891,14 @@ class ViewerApp:
 
     def zoom_fit(self):
         self.fit_viewer(force=True)
+        self.refresh_info()
+
+    def zoom_in(self):
+        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
+        self.refresh_info()
+
+    def zoom_out(self):
+        self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
     def rotate_c(self):
