@@ -351,8 +351,8 @@ class UndoStack:
         return action
 
 class ViewerApp:
-    DEF_WIDTH = 640
-    DEF_HEIGHT = 480
+    DEF_WIDTH = 1024
+    DEF_HEIGHT = 768
     TH_SIZE = 200
     BG_COLOR = "#000000"
 
@@ -395,7 +395,7 @@ class ViewerApp:
         # Menubar
         # XXX proper behavior of "embedded player"
         # XXX proper behavior of "Right/Left"
-        # XXX show toolbar
+        # XXX disable reuse menuitem and toolbutton if no prev target
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
                               "accel" : "O",
@@ -440,7 +440,12 @@ class ViewerApp:
                               "accel" : (gtk.keysyms.period, 0),
                               "handler" : self.on_reuse_target}]},
                  {"text" : "_View",
-                  "items" : [{"toggle" : "Show thumbnails",
+                  "items" : [{"toggle" : "Show toolbar",
+                              "active" : True,
+                              "accel" : "A",
+                              "key" : "toolbar_toggle",
+                              "handler" : self.on_toggle_toolbar},
+                             {"toggle" : "Show thumbnails",
                               "active" : True,
                               "accel" : "T",
                               "key" : "thumbnails_toggle",
@@ -540,7 +545,110 @@ class ViewerApp:
         self.menu_bar, self.widget_dict = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
-        # Pinbar (pack it AFTER the menu bar)
+        # XXX move to function
+        # XXX move focus out of the toolbar
+
+        # Toolbar
+        self.toolbar = gtk.Toolbar()
+        self.toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
+        
+        button = gtk.ToolButton(gtk.STOCK_OPEN)
+        button.connect("clicked", self.on_open_file)
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_FILE)
+        button.connect("clicked", self.on_rename_current)
+        button.set_label("Rename")
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_REMOVE)
+        button.connect("clicked", self.on_delete_current)
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToolButton(gtk.STOCK_UNDO)
+        button.connect("clicked", self.on_undo)
+        button.set_sensitive(False)
+        self.widget_dict["undo_button"] = button
+        self.toolbar.insert(button, -1)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
+        button = gtk.ToolButton(gtk.STOCK_ABOUT)
+        button.connect("clicked", self.on_toggle_star)
+        button.set_label("Star")
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_INDENT)
+        button.connect("clicked", self.on_move_to_target)
+        button.set_label("Move")
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_REFRESH)
+        button.connect("clicked", self.on_reuse_target)
+        button.set_label("Reuse")
+        button.set_is_important(True)
+        self.toolbar.insert(button, -1)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToggleToolButton(gtk.STOCK_ZOOM_FIT)
+        button.set_active(True)
+        button.connect("clicked", self.on_toggle_zoom)
+        self.widget_dict["zoom_to_fit_button"] = button
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
+        button.connect("clicked", self.on_zoom_in)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_ZOOM_OUT)
+        button.connect("clicked", self.on_zoom_out)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
+        button.connect("clicked", self.on_toggle_fullscreen)
+        self.widget_dict["fullscreen_button"] = button
+        self.toolbar.insert(button, -1)
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        # XXX rotate c
+        # XXX rotate cc
+        # XXX flip h
+        # XXX flip v
+
+        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
+        button = gtk.ToolButton(gtk.STOCK_GO_BACK)
+        button.connect("clicked", self.on_go_back)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
+        button.connect("clicked", self.on_go_forward)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GOTO_FIRST)
+        button.connect("clicked", self.on_goto_first)
+        self.toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GOTO_LAST)
+        button.connect("clicked", self.on_goto_last)
+        self.toolbar.insert(button, -1)
+
+        # XXX sort date
+        # XXX sort name
+        # XXX invert sort
+
+        vbox.pack_start(self.toolbar, False, False, 0)
+
+        # Pinbar (pack it AFTER the toolbar)
         vbox.pack_start(self.pinbar.get_widget(), False, False, 0)
 
         # Viewer hbox
@@ -669,6 +777,7 @@ class ViewerApp:
         old_size = self.image_viewer.get_scaled_size()
 
         self.widget_dict["zoom_to_fit_toggle"].set_active(False)
+        self.widget_dict["zoom_to_fit_button"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
         self.refresh_info()
 
@@ -714,9 +823,11 @@ class ViewerApp:
 
     def on_undo_stack_push(self, item):
         self.widget_dict["undo"].set_sensitive(True)
+        self.widget_dict["undo_button"].set_sensitive(True)
 
     def on_undo_stack_empty(self):
         self.widget_dict["undo"].set_sensitive(False)
+        self.widget_dict["undo_button"].set_sensitive(False)
     ## 
 
     ## Internal helpers
@@ -741,6 +852,7 @@ class ViewerApp:
         self.th_right.load(self.file_manager.get_next_file())
 
         self.widget_dict["zoom_to_fit_toggle"].set_active(True)
+        self.widget_dict["zoom_to_fit_button"].set_active(True)
         self.fit_viewer(force=True)
         self.refresh_info()
 
@@ -844,13 +956,17 @@ class ViewerApp:
         about.show()
 
     def on_toggle_fullscreen(self, toggle):
-        if toggle.active:
+        if toggle.get_active():
             self.window.fullscreen()
         else:
             self.window.unfullscreen()
 
+        self.widget_dict["fullscreen_toggle"].set_active(toggle.get_active())
+        self.widget_dict["fullscreen_button"].set_active(toggle.get_active())
+
     def on_toggle_fullview(self, _):
         fullscreen_on = self.widget_dict["fullscreen_toggle"].active
+        toolbar_on = self.widget_dict["toolbar_toggle"].active
         pinbar_on = self.widget_dict["pinbar_toggle"].active
         thumbnails_on = self.widget_dict["thumbnails_toggle"].active
         status_bar_on = self.widget_dict["status_bar_toggle"].active
@@ -859,6 +975,7 @@ class ViewerApp:
             if not fullscreen_on:
                 self.window.fullscreen()
             self.menu_bar.hide()
+            self.toolbar.hide()
             self.pinbar.hide()
             self.go_back_icon.hide()
             self.go_forward_icon.hide()
@@ -870,6 +987,8 @@ class ViewerApp:
             if not fullscreen_on:
                 self.window.unfullscreen()
             self.menu_bar.show()
+            if toolbar_on:
+                self.toolbar.show()
             if pinbar_on:
                 self.pinbar.show()
             self.go_back_icon.show()
@@ -880,6 +999,12 @@ class ViewerApp:
             if status_bar_on:
                 self.status_bar.show()
             self.fullview_active = False
+
+    def on_toggle_toolbar(self, toggle):
+        if toggle.active:
+            self.toolbar.show()
+        else:
+            self.toolbar.hide()
 
     def on_toggle_thumbnails(self, toggle):
         if toggle.active:
@@ -994,20 +1119,25 @@ class ViewerApp:
             self.reload_viewer(force_stop=False)
 
     def on_toggle_zoom(self, toggle):
-        if toggle.active:
+        if toggle.get_active():
             self.fit_viewer(force=True)
         else:
             self.image_viewer.zoom_at(100)
+
+        self.widget_dict["zoom_to_fit_toggle"].set_active(toggle.get_active())
+        self.widget_dict["zoom_to_fit_button"].set_active(toggle.get_active())
 
         self.refresh_info()
 
     def on_zoom_in(self, _):
         self.widget_dict["zoom_to_fit_toggle"].set_active(False)
+        self.widget_dict["zoom_to_fit_button"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
         self.refresh_info()
 
     def on_zoom_out(self, _):
         self.widget_dict["zoom_to_fit_toggle"].set_active(False)
+        self.widget_dict["zoom_to_fit_button"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
