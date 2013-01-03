@@ -150,6 +150,43 @@ class WidgetFactory:
 
         return ebox
 
+    def get_menu(self, menu, accel_group):
+        gmenu = gtk.Menu()
+        gitem = gtk.MenuItem(menu["text"])
+        gitem.set_submenu(gmenu)
+
+        for item in menu["items"]:
+            # Create menu item depending on type:
+            if item.has_key("menu"):
+                mitem = self.get_menu(item["menu"], accel_group)
+            elif item.has_key("text"):
+                mitem = gtk.MenuItem(item["text"])
+            elif item.has_key("stock"):
+                mitem = gtk.ImageMenuItem(item["stock"], accel_group)
+            elif item.has_key("separator"):
+                mitem = gtk.SeparatorMenuItem()
+            elif item.has_key("toggle"):
+                mitem = gtk.CheckMenuItem(item["toggle"])
+                if item.has_key("active") and item["active"]:
+                    mitem.set_active(True)
+
+            if item.has_key("accel"):
+                accel = item["accel"]
+                if type(accel) is str:
+                    key, mod = gtk.accelerator_parse(item["accel"])
+                else:
+                    key, mod = accel
+                mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
+
+            # Connect handler if available:
+            if item.has_key("handler"):
+                mitem.connect("activate", item["handler"])
+
+            # Add it to the menu:
+            gmenu.append(mitem)
+        
+        return gitem
+
     def get_menu_bar(self, window, menus):
         menu_bar = gtk.MenuBar()
 
@@ -157,39 +194,7 @@ class WidgetFactory:
         window.add_accel_group(accel_group)
 
         for menu in menus:
-            gmenu = gtk.Menu()
-            gitem = gtk.MenuItem(menu["text"])
-            gitem.set_submenu(gmenu)
-
-            for item in menu["items"]:
-                # Create menu item depending on type:
-                if item.has_key("text"):
-                    mitem = gtk.MenuItem(item["text"])
-                elif item.has_key("stock"):
-                    mitem = gtk.ImageMenuItem(item["stock"], accel_group)
-                elif item.has_key("separator"):
-                    mitem = gtk.SeparatorMenuItem()
-                elif item.has_key("toggle"):
-                    mitem = gtk.CheckMenuItem(item["toggle"])
-                    if item.has_key("active") and item["active"]:
-                        mitem.set_active(True)
-
-                if item.has_key("accel"):
-                    accel = item["accel"]
-                    if type(accel) is str:
-                        key, mod = gtk.accelerator_parse(item["accel"])
-                    else:
-                        key, mod = accel
-                    mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
-
-                # Connect handler if available:
-                if item.has_key("handler"):
-                    mitem.connect("activate", item["handler"])
-
-                # Add it to the menu:
-                gmenu.append(mitem)
-
-            menu_bar.append(gitem)
+            menu_bar.append(self.get_menu(menu, accel_group))
 
         return menu_bar
 
@@ -321,6 +326,7 @@ class ViewerApp:
                                         self.on_list_modified)
 
         self.files_order = None
+        self.inverse_order = False
         self.base_dir = base_dir
         self.last_opened_file = None
         self.last_targets = []
@@ -344,12 +350,12 @@ class ViewerApp:
         # Must be instatiated first to associate the accelerators:
         self.pinbar = Pinbar(self)
 
-        pinbar_send = lambda i: {"text" : "Send to bucket %i" % ((i+1)%10),
+        pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
                                  "accel" : "<Alt>%i" % ((i+1)%10),
                                  "handler" : self.pinbar.on_send_to(i)}
-        pinbar_assoc = lambda i: {"text" : "Associate bucket %i" % ((i+1)%10),
+        pinbar_assoc = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
                                   "accel" : "<Control>%i" % ((i+1)%10),
-                                  "handler" : self.pinbar.on_send_to(i)}
+                                  "handler" : self.pinbar.on_associate(i)}
         # Menubar
         # XXX clean handlers
         # XXX proper behavior of "embedded player"
@@ -357,8 +363,6 @@ class ViewerApp:
         # XXX proper behavior of "zoom to fit"
         # XXX proper behavior of "view pinbar"
         # XXX proper behavior of "Right/Left"
-        # XXX submenu for sort (name/date, ascending/descending)
-        # XXX submenu for pinbar send to / associate
         # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
@@ -368,7 +372,7 @@ class ViewerApp:
                               "accel" : "<Control>M",
                               "handler" : lambda _: self.rename_current()},
                              {"stock" : gtk.STOCK_DELETE,
-                              "accel" : "D",
+                              "accel" : "K",
                               "handler" : lambda _: self.delete_image()},
                              {"separator" : True},
                              {"text" : "Open in external viewer",
@@ -419,7 +423,7 @@ class ViewerApp:
                               "handler" : lambda _: self.zoom_out()},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_FULLSCREEN,
-                              "accel" : "F11",
+                              "accel" : "L",
                               "handler" : lambda _: self.toggle_fullscreen()}]},
                  {"text" : "_Image",
                   "items" : [{"text" : "Rotate clockwise",
@@ -457,32 +461,34 @@ class ViewerApp:
                               "accel" : "<Control>Left",
                               "handler" : lambda _: self.jump_backward()},
                              {"separator" : True},
-                             {"text" : "Sort by date ascending",
-                              "accel" : "D",
-                              "handler" : lambda _: self.sort_by_date_asc()},
-                             {"stock" : "Sort by date descending",
-                              "accel" : "<Control>D",
-                              "handler" : lambda _: self.sort_by_date_desc()},
-                             {"text" : "Sort by name ascending",
-                              "accel" : "N",
-                              "handler" : lambda _: self.sort_by_name_asc()},
-                             {"stock" : "Sort by name descending",
-                              "accel" : "<Control>N",
-                              "handler" : lambda _: self.sort_by_name_desc()}]},
+                             {"menu" : {"text" : "Sort by",
+                                        "items" : [{"text" : "Date",
+                                                    "accel" : "D",
+                                                    "handler" : lambda _: self.sort_by_date()},
+                                                   {"text" : "Name",
+                                                    "accel" : "N",
+                                                    "handler" : lambda _: self.sort_by_name()},
+                                                   {"separator" : True},
+                                                   {"toggle" : "Inverted order",
+                                                    "accel" : "I",
+                                                    "handler" : self.on_inverse_sort_order}]}}]},
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
                               "accel" : "P",
                               "handler" : lambda _: self.toggle_pinbar()},
                              {"separator" : True},
-                             pinbar_send(0), pinbar_send(1), pinbar_send(2),
-                             pinbar_send(3), pinbar_send(4), pinbar_send(5),
-                             pinbar_send(6), pinbar_send(7), pinbar_send(8),
-                             pinbar_send(9),
-                             {"separator" : True},
-                             pinbar_assoc(0), pinbar_assoc(1), pinbar_assoc(2),
-                             pinbar_assoc(3), pinbar_assoc(4), pinbar_assoc(5),
-                             pinbar_assoc(6), pinbar_assoc(7), pinbar_assoc(8),
-                             pinbar_assoc(9)]},
+                             {"menu" : {"text" : "Send to",
+                                        "items" : [pinbar_send(0), pinbar_send(1), 
+                                                   pinbar_send(2), pinbar_send(3), 
+                                                   pinbar_send(4), pinbar_send(5), 
+                                                   pinbar_send(6), pinbar_send(7), 
+                                                   pinbar_send(8), pinbar_send(9),]}},
+                             {"menu" : {"text" : "Associate",
+                                        "items" : [pinbar_assoc(0), pinbar_assoc(1), 
+                                                   pinbar_assoc(2), pinbar_assoc(3), 
+                                                   pinbar_assoc(4), pinbar_assoc(5), 
+                                                   pinbar_assoc(6), pinbar_assoc(7), 
+                                                   pinbar_assoc(8), pinbar_assoc(9)]}}]},
                  {"text" : "_Help",
                   "items" : [{"stock" : gtk.STOCK_ABOUT,
                               "handler" : lambda _: self.show_about()}]}]
@@ -570,6 +576,7 @@ class ViewerApp:
         self.file_manager.set_files(files)
 
         self.files_order = None
+        self.inverse_order = False
         self.undo_stack = []
 
         if start_file:
@@ -733,10 +740,11 @@ class ViewerApp:
             span += ">%s</span>" % last_action.description
             file_info += "\n<i>Last action:</i> " + span
 
-        file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s" % \
+        file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s %s" % \
                      (self.file_manager.get_current_index() + 1, 
                       self.file_manager.get_list_length(),
-                      self.files_order)
+                      self.files_order,
+                      "Desc" if self.inverse_order else "Asc")
 
         rss, vsize = get_process_memory_usage()
         file_index += "\n<i>RSS:</i> %s\n<i>VSize:</i> %s" % (Size(rss), Size(vsize))
@@ -744,6 +752,14 @@ class ViewerApp:
         self.file_info.set_markup(file_info)
         self.file_index.set_markup(file_index)
         self.file_index.set_justify(gtk.JUSTIFY_RIGHT)
+
+    def reorder_files(self):
+        if self.files_order == "Date":
+            self.file_manager.sort_by_date(self.inverse_order)
+        elif self.files_order == "Name":
+            self.file_manager.sort_by_name(self.inverse_order)
+        else:
+            assert(False)
     ##
 
     ## Key Bindings
@@ -857,21 +873,19 @@ class ViewerApp:
     def delete_image(self):
         self.undo_stack.append(self.file_manager.delete_current())
 
-    def sort_by_date_asc(self):
-        self.files_order = "Date Asc"
-        self.file_manager.sort_by_date(reverse=False)
+    def sort_by_date(self):
+        self.files_order = "Date"
+        self.reorder_files()
 
-    def sort_by_date_desc(self):
-        self.files_order = "Date Desc"
-        self.file_manager.sort_by_date(reverse=True)
+    def sort_by_name(self):
+        self.files_order = "Name"
+        self.reorder_files()
 
-    def sort_by_name_asc(self):
-        self.files_order = "Name Asc"
-        self.file_manager.sort_by_name(reverse=False)
-
-    def sort_by_name_desc(self):
-        self.files_order = "Name Desc"
-        self.file_manager.sort_by_name(reverse=True)
+    def on_inverse_sort_order(self, toggle):
+        if not self.files_order:
+            return
+        self.inverse_order = toggle.active
+        self.reorder_files()
 
     def external_open(self):
         current_file = self.file_manager.get_current_file()
