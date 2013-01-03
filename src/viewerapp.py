@@ -369,6 +369,7 @@ class ViewerApp:
                                     self.on_undo_stack_empty)
 
         self.embedded_app = None
+        self.fullview_active = False
 
         ### Window composition
         factory = WidgetFactory()
@@ -394,7 +395,6 @@ class ViewerApp:
         # Menubar
         # XXX proper behavior of "embedded player"
         # XXX proper behavior of "Right/Left"
-        # XXX view image in fullscreen (V)
         # XXX show toolbar
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
@@ -490,17 +490,17 @@ class ViewerApp:
                               "handler" : self.on_goto_last},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_GO_FORWARD,
-                              "accel" : "<Alt>Right",
+                              "accel" : "Right",
                               "handler" : self.on_go_forward},
                              {"stock" : gtk.STOCK_GO_BACK,
-                              "accel" : "<Alt>Left",
+                              "accel" : "Left",
                               "handler" : self.on_go_back},
                              {"separator" : True},
                              {"text" : "Jump forward",
-                              "accel" : "<Control>Right",
+                              "accel" : "<Alt>Right",
                               "handler" : self.on_jump_forward},
                              {"stock" : "Jump back",
-                              "accel" : "<Control>Left",
+                              "accel" : "<Alt>Left",
                               "handler" : self.on_jump_back},
                              {"separator" : True},
                              {"menu" : {"text" : "Sort by",
@@ -548,8 +548,8 @@ class ViewerApp:
         vbox.pack_start(hbox, True, True, 0)
 
         # Left thumbnail
-        go_back = factory.get_image_from_stock(gtk.STOCK_GO_BACK, 1)
-        ebox = factory.get_event_box(child=go_back,
+        self.go_back_icon = factory.get_image_from_stock(gtk.STOCK_GO_BACK, 1)
+        ebox = factory.get_event_box(child=self.go_back_icon,
                                      bg_color=self.BG_COLOR,
                                      on_button_press_event=self.on_th_prev_press,
                                      on_scroll_event=self.on_th_scroll)
@@ -581,8 +581,8 @@ class ViewerApp:
                                      on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
 
-        go_forward = factory.get_image_from_stock(gtk.STOCK_GO_FORWARD, 1)
-        ebox = factory.get_event_box(child=go_forward,
+        self.go_forward_icon = factory.get_image_from_stock(gtk.STOCK_GO_FORWARD, 1)
+        ebox = factory.get_event_box(child=self.go_forward_icon,
                                      bg_color=self.BG_COLOR,
                                      on_button_press_event=self.on_th_next_press,
                                      on_scroll_event=self.on_th_scroll)
@@ -825,6 +825,9 @@ class ViewerApp:
             ## Generic actions:
             "Escape"      : self.quit_app,
 
+            ## Image:
+            "v"           : lambda: self.on_toggle_fullview(None),
+
             ## Files navigation:
             "Right"       : lambda: self.on_go_forward(None),
             "Left"        : lambda: self.on_go_back(None),
@@ -846,9 +849,45 @@ class ViewerApp:
         else:
             self.window.unfullscreen()
 
-    def on_toggle_thumbnails(self, _):
-        self.th_left.toggle_visible()
-        self.th_right.toggle_visible()
+    def on_toggle_fullview(self, _):
+        fullscreen_on = self.widget_dict["fullscreen_toggle"].active
+        pinbar_on = self.widget_dict["pinbar_toggle"].active
+        thumbnails_on = self.widget_dict["thumbnails_toggle"].active
+        status_bar_on = self.widget_dict["status_bar_toggle"].active
+
+        if not self.fullview_active:
+            if not fullscreen_on:
+                self.window.fullscreen()
+            self.menu_bar.hide()
+            self.pinbar.hide()
+            self.go_back_icon.hide()
+            self.go_forward_icon.hide()
+            self.th_left.hide()
+            self.th_right.hide()
+            self.status_bar.hide()
+            self.fullview_active = True
+        else:
+            if not fullscreen_on:
+                self.window.unfullscreen()
+            self.menu_bar.show()
+            if pinbar_on:
+                self.pinbar.show()
+            self.go_back_icon.show()
+            self.go_forward_icon.show()
+            if thumbnails_on:
+                self.th_left.show()
+                self.th_right.show()
+            if status_bar_on:
+                self.status_bar.show()
+            self.fullview_active = False
+
+    def on_toggle_thumbnails(self, toggle):
+        if toggle.active:
+            self.th_left.show()
+            self.th_right.show()
+        else:
+            self.th_left.hide()
+            self.th_right.hide()
 
     def on_toggle_status_bar(self, toggle):
         if toggle.active:

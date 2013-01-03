@@ -118,9 +118,3 @@ class ThumbnailViewer(ImageViewer):
         self.widget.show()
         self.redraw()
 
-    def toggle_visible(self):
-        if self.hidden:
-            self.show()
-        else:
-            self.hide()
-
