@@ -20,13 +20,13 @@ Video files are previewed selecting a frame located at approximately 20% of the 
 
 ### Embedded preview
 
-By pressing the 'e' key, if the current file is an animated GIF file, animation will start. That setting is persistent, so if you switch to another GIF file it will also be animated, until animation is toggled off again with the 'e' key. 
+By pressing the 'E' key, if the current file is an animated GIF file, animation will start. That setting is persistent, so if you switch to another GIF file it will also be animated, until animation is toggled off again with the 'E' key. 
 
 For video files, pressing the 'e' key will embed a video player in the main window, but it's not permanent, so if you switch to a new video, the embedded player will be killed and will have to be started again with the 'e' key.
 
 ## Moving files
 
-The idea is to make it easy to distribute a big set of files into different directories. The first step is to select a base directory. Once the base directory is selected, every time a new target directory is selected, it will be relative to the base dir. When the 'Tab', 'l', or 'down arrow' key is pressed, a directory selection dialog will be presented, starting in the base directory. Once a directory is selected, the current file will be moved to that dir. 
+The idea is to make it easy to distribute a big set of files into different directories. The first step is to select a base directory. Once the base directory is selected (B), every time a new target directory is selected, it will be relative to the base dir. When the 'M' key is pressed, a directory selection dialog will be presented, starting in the base directory. Once a directory is selected, the current file will be moved to that dir. 
 
 ### Auto-handling of conflicts
 
@@ -34,11 +34,12 @@ If an identical file is located in the selected target dir (a file with the same
 
 ### Undo/repeat
 
-If a file is moved, auto-renamed or deleted, the action will be displayed in the status area, and can be undone by pressing the 'u' key. If you just want to repeat the last action (moving the current file to the last selected dir), you can press the '.' or 'Enter' key. 
+If a file is moved, auto-renamed or deleted, the action will be displayed in the status area, and can be undone by pressing the 'U' key. If you just want to repeat the last action (moving the current file to the last selected dir), you can press the '.' key. 
 
 ## Requirements
 
-* __pdfimages__ ("xpdf-tools" port in Macports)
+* __pdfimages__ ("xpdf-tools" port in Macports, in Ubuntu is usually already installed)
+* __ffmpeg__ ("ffmpeg" in both Ubuntu and Macports)
 
 ## Features summary
 
@@ -55,26 +56,33 @@ It supports previewing the following kind of files:
 ### Actions
 
 * __Image manipulation__
- * __Rotation__ (r: clockwise, R: counter-clockwise)
- * __Zooming__ (1: zoom 100%, 0: zoom-to-fit, mouse scroll: adjust zoom)
- * __Vertical/horizontal flip__ (f: horizontal, F: vertical)
+ * __Rotation__ (R: clockwise, Control-R: counter-clockwise)
+ * __Zooming__ (Z: toggle zoom-to-fit/100%, +/-/mouse scroll: adjust zoom)
+ * __Vertical/horizontal flip__ (F: horizontal, Control-F: vertical)
 
 * __File management__
- * __Select base dir__ (F3)
- * __Delete/undelete__ (_Linux only_) (Delete, u)
- * __File move__ (Tab, l, down arrow)
- * __File rename__ (F2)
- * __Starring/unstarring__ (s)
+ * __Select base dir__ (B)
+ * __Delete__ (_Linux only_) (K) 
+ * __File move__ (M)
+ * __File rename__ (Control-M)
+ * __Starring/unstarring__ (S)
+ * __Undo__ (U)
  * __Repeat last action__ ('.', Enter)
- * __Open__ (o)
+ * __Open__ (Control-O)
+ * __Toggle pinbar__ (P)
+ * __Send to bucket 'n'__ (1-0)
+ * __Associate target of bucket 'n'__ (Control 1-0)
 
 * __Navigation__
- * __Open with external viewer__ (x)
- * __Enable/disable embedded preview__ (e)
- * __Sort by date ascending/descending__ (d: ascending, D: descending)
- * __Sort by name ascending/descending__ (n: ascending, N: descending)
- * __Fullscreen__ (F11)
- * __Toggle thumbnails__ (F12)
+ * __Open with external viewer__ (X)
+ * __Enable/disable embedded preview__ (E)
+ * __Sort by date__ (D)
+ * __Sort by name__ (N)
+ * __Invert sort order__ (I)
+ * __Fullscreen__ (L)
+ * __Toggle thumbnails__ (T)
+ * __Go forward/back__ (Right, Left)
+ * __Goto first/last__ (H, End)
 
 ### Misc features
 

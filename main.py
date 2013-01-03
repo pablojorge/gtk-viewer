@@ -14,6 +14,7 @@ from viewerapp import ViewerApp
 # TODO Thumbnail view (complete, as a bar or both)
 # TODO Support for copying files
 # TODO Implement a toolbox
+# TODO Filter for starred files
 
 def check_directories(args):
     for arg in args:
