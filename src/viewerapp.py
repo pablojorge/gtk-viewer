@@ -150,7 +150,7 @@ class WidgetFactory:
 
         return ebox
 
-    def get_menu(self, menu, accel_group):
+    def get_menu(self, menu, widget_dict, accel_group):
         gmenu = gtk.Menu()
         gitem = gtk.MenuItem(menu["text"])
         gitem.set_submenu(gmenu)
@@ -158,7 +158,7 @@ class WidgetFactory:
         for item in menu["items"]:
             # Create menu item depending on type:
             if item.has_key("menu"):
-                mitem = self.get_menu(item["menu"], accel_group)
+                mitem = self.get_menu(item["menu"], widget_dict, accel_group)
             elif item.has_key("text"):
                 mitem = gtk.MenuItem(item["text"])
             elif item.has_key("stock"):
@@ -178,6 +178,9 @@ class WidgetFactory:
                     key, mod = accel
                 mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
 
+            if item.has_key("key"):
+                widget_dict[item["key"]] = mitem
+
             # Connect handler if available:
             if item.has_key("handler"):
                 mitem.connect("activate", item["handler"])
@@ -189,14 +192,15 @@ class WidgetFactory:
 
     def get_menu_bar(self, window, menus):
         menu_bar = gtk.MenuBar()
+        widget_dict = {}
 
         accel_group = gtk.AccelGroup()
         window.add_accel_group(accel_group)
 
         for menu in menus:
-            menu_bar.append(self.get_menu(menu, accel_group))
+            menu_bar.append(self.get_menu(menu, widget_dict, accel_group))
 
-        return menu_bar
+        return menu_bar, widget_dict
 
 class Pinbar:
     THUMB_COUNT = 10
@@ -330,12 +334,10 @@ class ViewerApp:
                                         self.on_list_modified)
 
         self.files_order = None
-        self.inverse_order = False
         self.base_dir = base_dir
         self.last_opened_file = None
         self.last_targets = []
         self.undo_stack = []
-        self.zoom_to_fit = True
 
         self.embedded_app = None
 
@@ -364,8 +366,6 @@ class ViewerApp:
         # XXX proper behavior of "embedded player"
         # XXX proper behavior of "Right/Left"
         # XXX view image in fullscreen (V)
-        # XXX show menubar
-        # XXX show statusbar
         # XXX show toolbar
         # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
@@ -385,6 +385,7 @@ class ViewerApp:
                               "handler" : self.on_external_open},
                              {"toggle" : "Enable embedded player",
                               "accel" : "E",
+                              "key" : "embedded_toggle",
                               "handler" : self.on_embedded_open},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_QUIT,
@@ -393,6 +394,7 @@ class ViewerApp:
                  {"text" : "_Edit",
                   "items" : [{"stock" : gtk.STOCK_UNDO,
                               "accel" : "U",
+                              "key" : "undo",
                               "handler" : self.on_undo},
                              {"separator" : True},
                              {"text" : "Star/unstar image",
@@ -412,10 +414,18 @@ class ViewerApp:
                   "items" : [{"toggle" : "Show thumbnails",
                               "active" : True,
                               "accel" : "T",
+                              "key" : "thumbnails_toggle",
                               "handler" : self.on_toggle_thumbnails},
+                             {"toggle" : "Show status bar",
+                              "active" : True,
+                              "accel" : "C",
+                              "key" : "status_bar_toggle",
+                              "handler" : self.on_toggle_status_bar},
                              {"separator" : True},
-                             {"text" : "Toggle zoom",
+                             {"toggle" : "Zoom to fit",
+                              "active" : True,
                               "accel" : "Z",
+                              "key" : "zoom_to_fit_toggle",
                               "handler" : self.on_toggle_zoom},
                              {"stock" : gtk.STOCK_ZOOM_IN,
                               "accel" : (gtk.keysyms.plus, 0),
@@ -426,6 +436,7 @@ class ViewerApp:
                              {"separator" : True},
                              {"toggle" : "Fullscreen",
                               "accel" : "L",
+                              "key" : "fullscreen_toggle",
                               "handler" : self.on_toggle_fullscreen}]},
                  {"text" : "_Image",
                   "items" : [{"text" : "Rotate clockwise",
@@ -472,11 +483,13 @@ class ViewerApp:
                                                     "handler" : self.on_sort_by_name},
                                                    {"separator" : True},
                                                    {"toggle" : "Inverted order",
+                                                    "key" : "inverted_order_toggle",
                                                     "accel" : "I",
                                                     "handler" : self.on_toggle_sort_order}]}}]},
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
                               "accel" : "P",
+                              "key" : "pinbar_toggle",
                               "handler" : self.on_show_pinbar},
                              {"separator" : True},
                              {"menu" : {"text" : "Send to",
@@ -495,7 +508,7 @@ class ViewerApp:
                   "items" : [{"stock" : gtk.STOCK_ABOUT,
                               "handler" : self.on_show_about}]}]
 
-        self.menu_bar = factory.get_menu_bar(self.window, menus)
+        self.menu_bar, self.widget_dict = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
         # Pinbar (pack it AFTER the menu bar)
@@ -578,7 +591,6 @@ class ViewerApp:
         self.file_manager.set_files(files)
 
         self.files_order = None
-        self.inverse_order = False
         self.undo_stack = []
 
         if start_file:
@@ -627,6 +639,7 @@ class ViewerApp:
 
         old_size = self.image_viewer.get_scaled_size()
 
+        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
         self.refresh_info()
 
@@ -692,6 +705,7 @@ class ViewerApp:
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
 
+        self.widget_dict["zoom_to_fit_toggle"].set_active(True)
         self.fit_viewer(force=True)
         self.refresh_info()
 
@@ -742,11 +756,12 @@ class ViewerApp:
             span += ">%s</span>" % last_action.description
             file_info += "\n<i>Last action:</i> " + span
 
+        inverse_order = self.widget_dict["inverted_order_toggle"].active
         file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s %s" % \
                      (self.file_manager.get_current_index() + 1, 
                       self.file_manager.get_list_length(),
                       self.files_order,
-                      "Desc" if self.inverse_order else "Asc")
+                      "Desc" if inverse_order else "Asc")
 
         rss, vsize = get_process_memory_usage()
         file_index += "\n<i>RSS:</i> %s\n<i>VSize:</i> %s" % (Size(rss), Size(vsize))
@@ -798,6 +813,12 @@ class ViewerApp:
     def on_toggle_thumbnails(self, _):
         self.th_left.toggle_visible()
         self.th_right.toggle_visible()
+
+    def on_toggle_status_bar(self, toggle):
+        if toggle.active:
+            self.status_bar.show()
+        else:
+            self.status_bar.hide()
 
     def on_show_pinbar(self, toggle):
         if toggle.active:
@@ -883,7 +904,6 @@ class ViewerApp:
     def on_toggle_sort_order(self, toggle):
         if not self.files_order:
             return
-        self.inverse_order = toggle.active
         self.reorder_files()
 
     def on_external_open(self, _):
@@ -898,23 +918,21 @@ class ViewerApp:
             self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
             self.reload_viewer(force_stop=False)
 
-    def on_toggle_zoom(self, _):
-        if self.zoom_to_fit:
-            # Change to zoom at 100%:
-            self.image_viewer.zoom_at(100)
-            self.zoom_to_fit = False
-        else:
-            # Change to zoom to fit:
+    def on_toggle_zoom(self, toggle):
+        if toggle.active:
             self.fit_viewer(force=True)
-            self.zoom_to_fit = True
+        else:
+            self.image_viewer.zoom_at(100)
 
         self.refresh_info()
 
     def on_zoom_in(self, _):
+        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
         self.refresh_info()
 
     def on_zoom_out(self, _):
+        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
