@@ -232,7 +232,6 @@ class Pinbar:
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
-            label.set_max_width_chars(12) # XXX hardcoded char limit
             label.set_markup("<span underline='single'>%s</span>" % ((i+1) % self.THUMB_COUNT))
             self.label_array.append(label)
 
@@ -249,8 +248,13 @@ class Pinbar:
         if self.pinbar_size != (width, height):
             self.pinbar_size = (width, height)
 
+            new_width = (width-(self.THUMB_COUNT+1)) / self.THUMB_COUNT
+
             for thumb in self.thumb_array:
-                thumb.set_size((width-(self.THUMB_COUNT+1)) / self.THUMB_COUNT)
+                thumb.set_size(new_width)
+
+            for label in self.label_array:
+                label.set_size_request(new_width, 20)
 
     def on_th_press(self, index):
         def handler(widget, event, data=None):
@@ -600,20 +604,20 @@ class ViewerApp:
         self.refresh_info()
 
     def on_th_prev_press(self, widget, event, data=None):
-        self.prev_image()
+        self.on_go_back(None)
 
     def on_th_next_press(self, widget, event, data=None):
-        self.next_image()
+        self.on_go_forward(None)
 
     def on_th_scroll(self, widget, event, data=None):
         if event.direction == gtk.gdk.SCROLL_UP:
-            self.prev_image()
+            self.on_go_back(None)
         else:
-            self.next_image()
+            self.on_go_forward(None)
 
     # not real gtk events:
-    def on_viewer_drag_left(self): self.prev_image()
-    def on_viewer_drag_right(self): self.next_image()
+    def on_viewer_drag_left(self): self.on_go_back(None)
+    def on_viewer_drag_right(self): self.on_go_forward(None)
 
     def on_viewer_scroll(self, widget, event, data=None):
         if event.direction == gtk.gdk.SCROLL_UP:
