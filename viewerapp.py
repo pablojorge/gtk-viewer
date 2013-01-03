@@ -204,10 +204,11 @@ class Pinbar:
     def __init__(self, main_app):
         self.main_app = main_app
 
-        self.hidden = False
+        self.active = False
         self.pinbar_size = None
         self.thumb_array = []
         self.target_array = []
+        self.label_array = []
 
         factory = WidgetFactory()
 
@@ -231,7 +232,9 @@ class Pinbar:
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
+            label.set_max_width_chars(12)
             label.set_markup("<span underline='single'>%s</span>" % ((i+1) % self.THUMB_COUNT))
+            self.label_array.append(label)
 
             ebox = factory.get_event_box(child=label,
                                          bg_color=None,
@@ -288,6 +291,9 @@ class Pinbar:
             thumb.set_tooltip_text(dirname)
 
             self.target_array[index] = dirname
+            label = "<span underline='single'>%s</span> %s" % ((index+1) % self.THUMB_COUNT, 
+                                                                os.path.split(dirname)[-1])
+            self.label_array[index].set_markup(label)
 
         FileSelectorDialog("Select target dir", 
                            self.main_app.get_base_dir(),
@@ -298,21 +304,15 @@ class Pinbar:
         return self.hbox
 
     def hide(self):
-        self.hidden = True
+        self.active = False
         self.get_widget().hide()
 
     def show(self):
-        self.hidden = False
+        self.active = True
         self.get_widget().show()
 
-    def toggle_visible(self):
-        if self.hidden:
-            self.show()
-        else:
-            self.hide()
-
     def is_active(self):
-        return self.hidden != True
+        return self.active
 
 class ViewerApp:
     DEF_WIDTH = 640
@@ -331,6 +331,7 @@ class ViewerApp:
         self.last_opened_file = None
         self.last_targets = []
         self.undo_stack = []
+        self.zoom_to_fit = True
 
         self.embedded_app = None
         self.fullscreen = False
@@ -351,7 +352,7 @@ class ViewerApp:
         self.pinbar = Pinbar(self)
 
         pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
-                                 "accel" : "<Alt>%i" % ((i+1)%10),
+                                 "accel" : "%i" % ((i+1)%10),
                                  "handler" : self.pinbar.on_send_to(i)}
         pinbar_assoc = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
                                   "accel" : "<Control>%i" % ((i+1)%10),
@@ -360,12 +361,11 @@ class ViewerApp:
         # XXX clean handlers
         # XXX proper behavior of "embedded player"
         # XXX proper behavior of "fullscreen"
-        # XXX proper behavior of "zoom to fit"
-        # XXX proper behavior of "view pinbar"
         # XXX proper behavior of "Right/Left"
         # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
+                              "accel" : "O",
                               "handler" : lambda _: self.open_file()},
                              {"separator" : True},
                              {"text" : "Rename",
@@ -409,12 +409,9 @@ class ViewerApp:
                               "accel" : "T",
                               "handler" : lambda _: self.toggle_thumbnails()},
                              {"separator" : True},
-                             {"stock" : gtk.STOCK_ZOOM_100,
-                              "accel" : "0",
-                              "handler" : lambda _: self.zoom_100()},
-                             {"stock" : gtk.STOCK_ZOOM_FIT,
-                              "accel" : "1",
-                              "handler" : lambda _: self.zoom_fit()},
+                             {"text" : "Toggle zoom",
+                              "accel" : "Z",
+                              "handler" : lambda _: self.on_toggle_zoom()},
                              {"stock" : gtk.STOCK_ZOOM_IN,
                               "accel" : (gtk.keysyms.plus, 0),
                               "handler" : lambda _: self.zoom_in()},
@@ -475,7 +472,7 @@ class ViewerApp:
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
                               "accel" : "P",
-                              "handler" : lambda _: self.toggle_pinbar()},
+                              "handler" : self.on_show_pinbar},
                              {"separator" : True},
                              {"menu" : {"text" : "Send to",
                                         "items" : [pinbar_send(0), pinbar_send(1), 
@@ -803,8 +800,11 @@ class ViewerApp:
         self.th_left.toggle_visible()
         self.th_right.toggle_visible()
 
-    def toggle_pinbar(self):
-        self.pinbar.toggle_visible()
+    def on_show_pinbar(self, toggle):
+        if toggle.active:
+            self.pinbar.show()
+        else:
+            self.pinbar.hide()
 
     def first_image(self):
         self.file_manager.go_first()
@@ -899,12 +899,16 @@ class ViewerApp:
             self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
             self.reload_viewer(force_stop=False)
 
-    def zoom_100(self):
-        self.image_viewer.zoom_at(100)
-        self.refresh_info()
+    def on_toggle_zoom(self):
+        if self.zoom_to_fit:
+            # Change to zoom at 100%:
+            self.image_viewer.zoom_at(100)
+            self.zoom_to_fit = False
+        else:
+            # Change to zoom to fit:
+            self.fit_viewer(force=True)
+            self.zoom_to_fit = True
 
-    def zoom_fit(self):
-        self.fit_viewer(force=True)
         self.refresh_info()
 
     def zoom_in(self):
