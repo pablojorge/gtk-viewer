@@ -181,6 +181,9 @@ class WidgetFactory:
             if item.has_key("key"):
                 widget_dict[item["key"]] = mitem
 
+            if item.has_key("sensitive"):
+                mitem.set_sensitive(item["sensitive"])
+
             # Connect handler if available:
             if item.has_key("handler"):
                 mitem.connect("activate", item["handler"])
@@ -322,6 +325,31 @@ class Pinbar:
     def is_active(self):
         return self.active
 
+class UndoStack:
+    def __init__(self, on_push, on_stack_empty):
+        self.stack = []
+        self.on_push = on_push
+        self.on_stack_empty = on_stack_empty
+
+    def clear(self):
+        self.stack = []
+
+    def push(self, action):
+        self.stack.append(action)
+        self.on_push(action)
+
+    def empty(self):
+        return not self.stack
+
+    def top(self): 
+        return self.stack[-1]
+
+    def pop(self):
+        action = self.stack.pop()
+        if self.empty():
+            self.on_stack_empty()
+        return action
+
 class ViewerApp:
     DEF_WIDTH = 640
     DEF_HEIGHT = 480
@@ -337,7 +365,8 @@ class ViewerApp:
         self.base_dir = base_dir
         self.last_opened_file = None
         self.last_targets = []
-        self.undo_stack = []
+        self.undo_stack = UndoStack(self.on_undo_stack_push, 
+                                    self.on_undo_stack_empty)
 
         self.embedded_app = None
 
@@ -367,7 +396,6 @@ class ViewerApp:
         # XXX proper behavior of "Right/Left"
         # XXX view image in fullscreen (V)
         # XXX show toolbar
-        # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
                               "accel" : "O",
@@ -395,6 +423,7 @@ class ViewerApp:
                   "items" : [{"stock" : gtk.STOCK_UNDO,
                               "accel" : "U",
                               "key" : "undo",
+                              "sensitive" : False,
                               "handler" : self.on_undo},
                              {"separator" : True},
                              {"text" : "Star/unstar image",
@@ -591,7 +620,7 @@ class ViewerApp:
         self.file_manager.set_files(files)
 
         self.files_order = None
-        self.undo_stack = []
+        self.undo_stack.clear()
 
         if start_file:
             self.file_manager.go_file(start_file)
@@ -666,7 +695,7 @@ class ViewerApp:
             InfoDialog(self.window, "'%s' already exists!" % new_name).run()
             return
 
-        self.undo_stack.append(self.file_manager.rename_current(new_name))
+        self.undo_stack.push(self.file_manager.rename_current(new_name))
 
     def on_list_empty(self):
         if QuestionDialog(self.window, "No more files, select new one?").run():
@@ -682,6 +711,12 @@ class ViewerApp:
 
     def on_list_modified(self):
         self.reload_viewer()
+
+    def on_undo_stack_push(self, item):
+        self.widget_dict["undo"].set_sensitive(True)
+
+    def on_undo_stack_empty(self):
+        self.widget_dict["undo"].set_sensitive(False)
     ## 
 
     ## Internal helpers
@@ -691,7 +726,7 @@ class ViewerApp:
 
         self.last_targets.insert(0, target_dir)
 
-        self.undo_stack.append(self.file_manager.move_current(target_dir))
+        self.undo_stack.push(self.file_manager.move_current(target_dir))
 
     def stop_embedded_app(self):
         if self.embedded_app:
@@ -743,8 +778,8 @@ class ViewerApp:
         if self.last_targets:
             file_info += "\n<i>Last directory:</i> <b>%s</b>" % self.last_targets[0]
 
-        if self.undo_stack:
-            last_action = self.undo_stack[-1]
+        if not self.undo_stack.empty():
+            last_action = self.undo_stack.top()
             background, foreground = {
                 Action.NORMAL : ("green", None),
                 Action.WARNING : ("yellow", None),
@@ -771,10 +806,11 @@ class ViewerApp:
         self.file_index.set_justify(gtk.JUSTIFY_RIGHT)
 
     def reorder_files(self):
+        inverse_order = self.widget_dict["inverted_order_toggle"].active
         if self.files_order == "Date":
-            self.file_manager.sort_by_date(self.inverse_order)
+            self.file_manager.sort_by_date(inverse_order)
         elif self.files_order == "Name":
-            self.file_manager.sort_by_name(self.inverse_order)
+            self.file_manager.sort_by_name(inverse_order)
         else:
             assert(False)
 
@@ -880,7 +916,7 @@ class ViewerApp:
         self.move_current(self.last_targets[0])
 
     def on_undo(self, _):
-        if not self.undo_stack:
+        if self.undo_stack.empty():
             InfoDialog(self.window, "Nothing to undo!").run()
             return
 
@@ -888,10 +924,10 @@ class ViewerApp:
         action.undo()
 
     def on_toggle_star(self, _):
-        self.undo_stack.append(self.file_manager.toggle_star())
+        self.undo_stack.push(self.file_manager.toggle_star())
 
     def on_delete_current(self, _):
-        self.undo_stack.append(self.file_manager.delete_current())
+        self.undo_stack.push(self.file_manager.delete_current())
 
     def on_sort_by_date(self, _):
         self.files_order = "Date"
