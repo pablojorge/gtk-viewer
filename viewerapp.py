@@ -232,7 +232,7 @@ class Pinbar:
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
-            label.set_max_width_chars(12)
+            label.set_max_width_chars(12) # XXX hardcoded char limit
             label.set_markup("<span underline='single'>%s</span>" % ((i+1) % self.THUMB_COUNT))
             self.label_array.append(label)
 
@@ -334,7 +334,6 @@ class ViewerApp:
         self.zoom_to_fit = True
 
         self.embedded_app = None
-        self.fullscreen = False
 
         ### Window composition
         factory = WidgetFactory()
@@ -358,117 +357,119 @@ class ViewerApp:
                                   "accel" : "<Control>%i" % ((i+1)%10),
                                   "handler" : self.pinbar.on_associate(i)}
         # Menubar
-        # XXX clean handlers
         # XXX proper behavior of "embedded player"
-        # XXX proper behavior of "fullscreen"
         # XXX proper behavior of "Right/Left"
+        # XXX view image in fullscreen (V)
+        # XXX show menubar
+        # XXX show statusbar
+        # XXX show toolbar
         # XXX disable undo when stack is empty
         menus = [{"text" : "_File",
                   "items" : [{"stock" : gtk.STOCK_OPEN,
                               "accel" : "O",
-                              "handler" : lambda _: self.open_file()},
+                              "handler" : self.on_open_file},
                              {"separator" : True},
                              {"text" : "Rename",
                               "accel" : "<Control>M",
-                              "handler" : lambda _: self.rename_current()},
+                              "handler" : self.on_rename_current},
                              {"stock" : gtk.STOCK_DELETE,
                               "accel" : "K",
-                              "handler" : lambda _: self.delete_image()},
+                              "handler" : self.on_delete_current},
                              {"separator" : True},
                              {"text" : "Open in external viewer",
                               "accel" : "X",
-                              "handler" : lambda _: self.external_open()},
+                              "handler" : self.on_external_open},
                              {"toggle" : "Enable embedded player",
                               "accel" : "E",
-                              "handler" : lambda _: self.embedded_open()},
+                              "handler" : self.on_embedded_open},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_QUIT,
                               "accel" : "Q",
-                              "handler" : lambda _: self.quit_app()}]},
+                              "handler" : self.on_quit_app}]},
                  {"text" : "_Edit",
                   "items" : [{"stock" : gtk.STOCK_UNDO,
                               "accel" : "U",
-                              "handler" : lambda _: self.undo_last()},
+                              "handler" : self.on_undo},
                              {"separator" : True},
                              {"text" : "Star/unstar image",
                               "accel" : "S",
-                              "handler" : lambda _: self.toggle_star()},
+                              "handler" : self.on_toggle_star},
                              {"separator" : True},
                              {"text" : "Select base directory",
                               "accel" : "B",
-                              "handler" : lambda _: self.select_base_dir()},
+                              "handler" : self.on_select_base_dir},
                              {"text" : "Move to target",
                               "accel" : "M",
-                              "handler" : lambda _: self.show_selector()},
+                              "handler" : self.on_move_to_target},
                              {"text" : "Reuse last target",
                               "accel" : (gtk.keysyms.period, 0),
-                              "handler" : lambda _: self.repeat_selection()}]},
+                              "handler" : self.on_reuse_target}]},
                  {"text" : "_View",
                   "items" : [{"toggle" : "Show thumbnails",
                               "active" : True,
                               "accel" : "T",
-                              "handler" : lambda _: self.toggle_thumbnails()},
+                              "handler" : self.on_toggle_thumbnails},
                              {"separator" : True},
                              {"text" : "Toggle zoom",
                               "accel" : "Z",
-                              "handler" : lambda _: self.on_toggle_zoom()},
+                              "handler" : self.on_toggle_zoom},
                              {"stock" : gtk.STOCK_ZOOM_IN,
                               "accel" : (gtk.keysyms.plus, 0),
-                              "handler" : lambda _: self.zoom_in()},
+                              "handler" : self.on_zoom_in},
                              {"stock" : gtk.STOCK_ZOOM_OUT,
                               "accel" : (gtk.keysyms.minus, 0),
-                              "handler" : lambda _: self.zoom_out()},
+                              "handler" : self.on_zoom_out},
                              {"separator" : True},
-                             {"stock" : gtk.STOCK_FULLSCREEN,
+                             {"toggle" : "Fullscreen",
                               "accel" : "L",
-                              "handler" : lambda _: self.toggle_fullscreen()}]},
+                              "handler" : self.on_toggle_fullscreen}]},
                  {"text" : "_Image",
                   "items" : [{"text" : "Rotate clockwise",
                               "accel" : "R",
-                              "handler" : lambda _: self.rotate_c()},
+                              "handler" : self.on_rotate_c},
                              {"text" : "Rotate counter-clockwise",
                               "accel" : "<Control>R",
-                              "handler" : lambda _: self.rotate_cc()},
+                              "handler" : self.on_rotate_cc},
                              {"separator" : True},
                              {"text" : "Flip horizontal",
                               "accel" : "F",
-                              "handler" : lambda _: self.flip_horizontal()},
+                              "handler" : self.on_flip_horizontal},
                              {"text" : "Flip vertical",
                               "accel" : "<Control>F",
-                              "handler" : lambda _: self.flip_vertical()}]},
+                              "handler" : self.on_flip_vertical}]},
                  {"text" : "_Go",
                   "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
-                              "accel" : "Home",
-                              "handler" : lambda _: self.first_image()},
+                              "accel" : "H",
+                              "handler" : self.on_goto_first},
                              {"stock" : gtk.STOCK_GOTO_LAST,
                               "accel" : "End",
-                              "handler" : lambda _: self.last_image()},
+                              "handler" : self.on_goto_last},
                              {"separator" : True},
                              {"stock" : gtk.STOCK_GO_FORWARD,
                               "accel" : "<Alt>Right",
-                              "handler" : lambda _: self.next_image()},
+                              "handler" : self.on_go_forward},
                              {"stock" : gtk.STOCK_GO_BACK,
                               "accel" : "<Alt>Left",
-                              "handler" : lambda _: self.prev_image()},
+                              "handler" : self.on_go_back},
                              {"separator" : True},
                              {"text" : "Jump forward",
                               "accel" : "<Control>Right",
-                              "handler" : lambda _: self.jump_forward()},
+                              "handler" : self.on_jump_forward},
                              {"stock" : "Jump back",
                               "accel" : "<Control>Left",
-                              "handler" : lambda _: self.jump_backward()},
+                              "handler" : self.on_jump_back},
                              {"separator" : True},
                              {"menu" : {"text" : "Sort by",
                                         "items" : [{"text" : "Date",
                                                     "accel" : "D",
-                                                    "handler" : lambda _: self.sort_by_date()},
+                                                    "handler" : self.on_sort_by_date},
                                                    {"text" : "Name",
                                                     "accel" : "N",
-                                                    "handler" : lambda _: self.sort_by_name()},
+                                                    "handler" : self.on_sort_by_name},
                                                    {"separator" : True},
                                                    {"toggle" : "Inverted order",
                                                     "accel" : "I",
-                                                    "handler" : self.on_inverse_sort_order}]}}]},
+                                                    "handler" : self.on_toggle_sort_order}]}}]},
                  {"text" : "_Pinbar",
                   "items" : [{"toggle" : "Show pinbar",
                               "accel" : "P",
@@ -488,7 +489,7 @@ class ViewerApp:
                                                    pinbar_assoc(8), pinbar_assoc(9)]}}]},
                  {"text" : "_Help",
                   "items" : [{"stock" : gtk.STOCK_ABOUT,
-                              "handler" : lambda _: self.show_about()}]}]
+                              "handler" : self.on_show_about}]}]
 
         self.menu_bar = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
@@ -757,6 +758,10 @@ class ViewerApp:
             self.file_manager.sort_by_name(self.inverse_order)
         else:
             assert(False)
+
+    def quit_app(self):
+        self.stop_embedded_app()
+        gtk.Widget.destroy(self.window)
     ##
 
     ## Key Bindings
@@ -766,37 +771,27 @@ class ViewerApp:
             "Escape"      : self.quit_app,
 
             ## Files navigation:
-            "Right"       : self.next_image,
-            "Left"        : self.prev_image,
+            "Right"       : lambda: self.on_go_forward(None),
+            "Left"        : lambda: self.on_go_back(None),
         }
-
-        if self.fullscreen:
-            bindings["Escape"] = self.toggle_fullscreen
 
         return bindings
 
     ## action handlers
-    def quit_app(self):
-        self.stop_embedded_app()
-        gtk.Widget.destroy(self.window)
+    def on_quit_app(self, _):
+        self.quit_app()
 
-    def show_about(self):
+    def on_show_about(self, _):
         about = AboutDialog(self.window)
         about.show()
 
-    def toggle_fullscreen(self):
-        if not self.fullscreen:
+    def on_toggle_fullscreen(self, toggle):
+        if toggle.active:
             self.window.fullscreen()
-            self.menu_bar.hide()
-            self.status_bar.hide()
-            self.fullscreen = True
         else:
             self.window.unfullscreen()
-            self.menu_bar.show()
-            self.status_bar.show()
-            self.fullscreen = False
 
-    def toggle_thumbnails(self):
+    def on_toggle_thumbnails(self, _):
         self.th_left.toggle_visible()
         self.th_right.toggle_visible()
 
@@ -806,22 +801,22 @@ class ViewerApp:
         else:
             self.pinbar.hide()
 
-    def first_image(self):
+    def on_goto_first(self, _):
         self.file_manager.go_first()
 
-    def last_image(self):
+    def on_goto_last(self, _):
         self.file_manager.go_last()
 
-    def jump_forward(self):
+    def on_jump_forward(self, _):
         self.file_manager.go_forward(10)
 
-    def jump_backward(self):
+    def on_jump_back(self, _):
         self.file_manager.go_backward(10)
 
-    def next_image(self):
+    def on_go_forward(self, _):
         self.file_manager.go_forward(1)
 
-    def prev_image(self):
+    def on_go_back(self, _):
         self.file_manager.go_backward(1)
 
     def get_base_dir(self):
@@ -830,36 +825,36 @@ class ViewerApp:
         else:
             return self.file_manager.get_current_file().get_dirname()
 
-    def show_selector(self):
+    def on_move_to_target(self, _):
         selector = TargetSelectorDialog(initial_dir=self.get_base_dir(), 
                                         last_targets=self.last_targets, 
                                         callback=self.on_target_selected)
         selector.run()
 
-    def open_file(self):
+    def on_open_file(self, _):
         initial_dir = self.file_manager.get_current_file().get_dirname()
         open_dialog = OpenDialog(initial_dir, self.on_file_selected)
         open_dialog.run()
 
-    def rename_current(self):
+    def on_rename_current(self, _):
         filename = self.file_manager.get_current_file().get_filename()
         renamer = RenameDialog(filename, self.on_new_name_selected)
         renamer.run()
 
-    def select_base_dir(self):
+    def on_select_base_dir(self, _):
         selector = BasedirSelectorDialog(initial_dir=self.get_base_dir(), 
                                          last_targets=[], 
                                          callback=self.on_base_dir_selected)
         selector.run()
 
-    def repeat_selection(self):
+    def on_reuse_target(self, _):
         if not self.last_targets:
             InfoDialog(self.window, "There isn't a selected target yet").run()
             return
 
         self.move_current(self.last_targets[0])
 
-    def undo_last(self):
+    def on_undo(self, _):
         if not self.undo_stack:
             InfoDialog(self.window, "Nothing to undo!").run()
             return
@@ -867,31 +862,31 @@ class ViewerApp:
         action = self.undo_stack.pop()
         action.undo()
 
-    def toggle_star(self):
+    def on_toggle_star(self, _):
         self.undo_stack.append(self.file_manager.toggle_star())
 
-    def delete_image(self):
+    def on_delete_current(self, _):
         self.undo_stack.append(self.file_manager.delete_current())
 
-    def sort_by_date(self):
+    def on_sort_by_date(self, _):
         self.files_order = "Date"
         self.reorder_files()
 
-    def sort_by_name(self):
+    def on_sort_by_name(self, _):
         self.files_order = "Name"
         self.reorder_files()
 
-    def on_inverse_sort_order(self, toggle):
+    def on_toggle_sort_order(self, toggle):
         if not self.files_order:
             return
         self.inverse_order = toggle.active
         self.reorder_files()
 
-    def external_open(self):
+    def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()
         current_file.external_open()
 
-    def embedded_open(self):
+    def on_embedded_open(self, _):
         current_file = self.file_manager.get_current_file()
         if self.embedded_app:
             self.reload_viewer(force_stop=True)
@@ -899,7 +894,7 @@ class ViewerApp:
             self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
             self.reload_viewer(force_stop=False)
 
-    def on_toggle_zoom(self):
+    def on_toggle_zoom(self, _):
         if self.zoom_to_fit:
             # Change to zoom at 100%:
             self.image_viewer.zoom_at(100)
@@ -911,24 +906,24 @@ class ViewerApp:
 
         self.refresh_info()
 
-    def zoom_in(self):
+    def on_zoom_in(self, _):
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
         self.refresh_info()
 
-    def zoom_out(self):
+    def on_zoom_out(self, _):
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
-    def rotate_c(self):
+    def on_rotate_c(self, _):
         self.image_viewer.rotate_c()
 
-    def rotate_cc(self):
+    def on_rotate_cc(self, _):
         self.image_viewer.rotate_cc()
 
-    def flip_horizontal(self):
+    def on_flip_horizontal(self, _):
         self.image_viewer.flip_horizontal()
 
-    def flip_vertical(self):
+    def on_flip_vertical(self, _):
         self.image_viewer.flip_vertical()
 
     ##
