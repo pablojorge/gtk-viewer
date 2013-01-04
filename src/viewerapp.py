@@ -386,266 +386,15 @@ class ViewerApp:
         # Must be instatiated first to associate the accelerators:
         self.pinbar = Pinbar(self)
 
-        pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
-                                 "accel" : "%i" % ((i+1)%10),
-                                 "handler" : self.pinbar.on_send_to(i)}
-        pinbar_assoc = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
-                                  "accel" : "<Control>%i" % ((i+1)%10),
-                                  "handler" : self.pinbar.on_associate(i)}
         # Menubar
-        # XXX proper behavior of "embedded player"
-        # XXX proper behavior of "Right/Left"
-        # XXX disable reuse menuitem and toolbutton if no prev target
-        menus = [{"text" : "_File",
-                  "items" : [{"stock" : gtk.STOCK_OPEN,
-                              "accel" : "O",
-                              "handler" : self.on_open_file},
-                             {"separator" : True},
-                             {"text" : "Rename",
-                              "accel" : "<Control>M",
-                              "handler" : self.on_rename_current},
-                             {"stock" : gtk.STOCK_DELETE,
-                              "accel" : "K",
-                              "handler" : self.on_delete_current},
-                             {"separator" : True},
-                             {"text" : "Open in external viewer",
-                              "accel" : "X",
-                              "handler" : self.on_external_open},
-                             {"toggle" : "Enable embedded player",
-                              "accel" : "E",
-                              "key" : "embedded_toggle",
-                              "handler" : self.on_embedded_open},
-                             {"separator" : True},
-                             {"stock" : gtk.STOCK_QUIT,
-                              "accel" : "Q",
-                              "handler" : self.on_quit_app}]},
-                 {"text" : "_Edit",
-                  "items" : [{"stock" : gtk.STOCK_UNDO,
-                              "accel" : "U",
-                              "key" : "undo",
-                              "sensitive" : False,
-                              "handler" : self.on_undo},
-                             {"separator" : True},
-                             {"text" : "Star/unstar image",
-                              "accel" : "S",
-                              "handler" : self.on_toggle_star},
-                             {"separator" : True},
-                             {"text" : "Select base directory",
-                              "accel" : "B",
-                              "handler" : self.on_select_base_dir},
-                             {"text" : "Move to target",
-                              "accel" : "M",
-                              "handler" : self.on_move_to_target},
-                             {"text" : "Reuse last target",
-                              "accel" : (gtk.keysyms.period, 0),
-                              "handler" : self.on_reuse_target}]},
-                 {"text" : "_View",
-                  "items" : [{"toggle" : "Show toolbar",
-                              "active" : True,
-                              "accel" : "A",
-                              "key" : "toolbar_toggle",
-                              "handler" : self.on_toggle_toolbar},
-                             {"toggle" : "Show thumbnails",
-                              "active" : True,
-                              "accel" : "T",
-                              "key" : "thumbnails_toggle",
-                              "handler" : self.on_toggle_thumbnails},
-                             {"toggle" : "Show status bar",
-                              "active" : True,
-                              "accel" : "C",
-                              "key" : "status_bar_toggle",
-                              "handler" : self.on_toggle_status_bar},
-                             {"separator" : True},
-                             {"toggle" : "Zoom to fit",
-                              "active" : True,
-                              "accel" : "Z",
-                              "key" : "zoom_to_fit_toggle",
-                              "handler" : self.on_toggle_zoom},
-                             {"stock" : gtk.STOCK_ZOOM_IN,
-                              "accel" : (gtk.keysyms.plus, 0),
-                              "handler" : self.on_zoom_in},
-                             {"stock" : gtk.STOCK_ZOOM_OUT,
-                              "accel" : (gtk.keysyms.minus, 0),
-                              "handler" : self.on_zoom_out},
-                             {"separator" : True},
-                             {"toggle" : "Fullscreen",
-                              "accel" : "L",
-                              "key" : "fullscreen_toggle",
-                              "handler" : self.on_toggle_fullscreen}]},
-                 {"text" : "_Image",
-                  "items" : [{"text" : "Rotate clockwise",
-                              "accel" : "R",
-                              "handler" : self.on_rotate_c},
-                             {"text" : "Rotate counter-clockwise",
-                              "accel" : "<Control>R",
-                              "handler" : self.on_rotate_cc},
-                             {"separator" : True},
-                             {"text" : "Flip horizontal",
-                              "accel" : "F",
-                              "handler" : self.on_flip_horizontal},
-                             {"text" : "Flip vertical",
-                              "accel" : "<Control>F",
-                              "handler" : self.on_flip_vertical}]},
-                 {"text" : "_Go",
-                  "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
-                              "accel" : "H",
-                              "handler" : self.on_goto_first},
-                             {"stock" : gtk.STOCK_GOTO_LAST,
-                              "accel" : "End",
-                              "handler" : self.on_goto_last},
-                             {"separator" : True},
-                             {"stock" : gtk.STOCK_GO_FORWARD,
-                              "accel" : "Right",
-                              "handler" : self.on_go_forward},
-                             {"stock" : gtk.STOCK_GO_BACK,
-                              "accel" : "Left",
-                              "handler" : self.on_go_back},
-                             {"separator" : True},
-                             {"text" : "Jump forward",
-                              "accel" : "<Alt>Right",
-                              "handler" : self.on_jump_forward},
-                             {"stock" : "Jump back",
-                              "accel" : "<Alt>Left",
-                              "handler" : self.on_jump_back},
-                             {"separator" : True},
-                             {"menu" : {"text" : "Sort by",
-                                        "items" : [{"text" : "Date",
-                                                    "accel" : "D",
-                                                    "handler" : self.on_sort_by_date},
-                                                   {"text" : "Name",
-                                                    "accel" : "N",
-                                                    "handler" : self.on_sort_by_name},
-                                                   {"separator" : True},
-                                                   {"toggle" : "Inverted order",
-                                                    "key" : "inverted_order_toggle",
-                                                    "accel" : "I",
-                                                    "handler" : self.on_toggle_sort_order}]}}]},
-                 {"text" : "_Pinbar",
-                  "items" : [{"toggle" : "Show pinbar",
-                              "accel" : "P",
-                              "key" : "pinbar_toggle",
-                              "handler" : self.on_show_pinbar},
-                             {"separator" : True},
-                             {"menu" : {"text" : "Send to",
-                                        "items" : [pinbar_send(0), pinbar_send(1), 
-                                                   pinbar_send(2), pinbar_send(3), 
-                                                   pinbar_send(4), pinbar_send(5), 
-                                                   pinbar_send(6), pinbar_send(7), 
-                                                   pinbar_send(8), pinbar_send(9),]}},
-                             {"menu" : {"text" : "Associate",
-                                        "items" : [pinbar_assoc(0), pinbar_assoc(1), 
-                                                   pinbar_assoc(2), pinbar_assoc(3), 
-                                                   pinbar_assoc(4), pinbar_assoc(5), 
-                                                   pinbar_assoc(6), pinbar_assoc(7), 
-                                                   pinbar_assoc(8), pinbar_assoc(9)]}}]},
-                 {"text" : "_Help",
-                  "items" : [{"stock" : gtk.STOCK_ABOUT,
-                              "handler" : self.on_show_about}]}]
-
+        menus = self.get_menubar_entries(self.pinbar)
         self.menu_bar, self.widget_dict = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
-        # XXX move to function
         # XXX move focus out of the toolbar
 
         # Toolbar
-        self.toolbar = gtk.Toolbar()
-        self.toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
-        
-        button = gtk.ToolButton(gtk.STOCK_OPEN)
-        button.connect("clicked", self.on_open_file)
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_FILE)
-        button.connect("clicked", self.on_rename_current)
-        button.set_label("Rename")
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_REMOVE)
-        button.connect("clicked", self.on_delete_current)
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
-
-        button = gtk.ToolButton(gtk.STOCK_UNDO)
-        button.connect("clicked", self.on_undo)
-        button.set_sensitive(False)
-        self.widget_dict["undo_button"] = button
-        self.toolbar.insert(button, -1)
-
-        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
-        
-        button = gtk.ToolButton(gtk.STOCK_ABOUT)
-        button.connect("clicked", self.on_toggle_star)
-        button.set_label("Star")
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_INDENT)
-        button.connect("clicked", self.on_move_to_target)
-        button.set_label("Move")
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_REFRESH)
-        button.connect("clicked", self.on_reuse_target)
-        button.set_label("Reuse")
-        button.set_is_important(True)
-        self.toolbar.insert(button, -1)
-
-        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
-
-        button = gtk.ToggleToolButton(gtk.STOCK_ZOOM_FIT)
-        button.set_active(True)
-        button.connect("clicked", self.on_toggle_zoom)
-        self.widget_dict["zoom_to_fit_button"] = button
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
-        button.connect("clicked", self.on_zoom_in)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_ZOOM_OUT)
-        button.connect("clicked", self.on_zoom_out)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
-        button.connect("clicked", self.on_toggle_fullscreen)
-        self.widget_dict["fullscreen_button"] = button
-        self.toolbar.insert(button, -1)
-
-        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
-
-        # XXX rotate c
-        # XXX rotate cc
-        # XXX flip h
-        # XXX flip v
-
-        self.toolbar.insert(gtk.SeparatorToolItem(), -1)
-        
-        button = gtk.ToolButton(gtk.STOCK_GO_BACK)
-        button.connect("clicked", self.on_go_back)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
-        button.connect("clicked", self.on_go_forward)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_GOTO_FIRST)
-        button.connect("clicked", self.on_goto_first)
-        self.toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_GOTO_LAST)
-        button.connect("clicked", self.on_goto_last)
-        self.toolbar.insert(button, -1)
-
-        # XXX sort date
-        # XXX sort name
-        # XXX invert sort
-
+        self.toolbar = self.build_toolbar(self.widget_dict)
         vbox.pack_start(self.toolbar, False, False, 0)
 
         # Pinbar (pack it AFTER the toolbar)
@@ -721,8 +470,264 @@ class ViewerApp:
         # Show main window AFTER obtaining file list
         self.window.show_all()
 
-        # But start hiding the pinbar
-        self.pinbar.hide()
+    def get_menubar_entries(self, pinbar):
+        pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
+                                 "accel" : "%i" % ((i+1)%10),
+                                 "handler" : pinbar.on_send_to(i)}
+        pinbar_assoc = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
+                                  "accel" : "<Control>%i" % ((i+1)%10),
+                                  "handler" : pinbar.on_associate(i)}
+
+        # XXX proper behavior of "embedded player"
+        # XXX proper behavior of "Right/Left"
+        # XXX disable reuse menuitem and toolbutton if no prev target
+        return [{"text" : "_File",
+                 "items" : [{"stock" : gtk.STOCK_OPEN,
+                             "accel" : "O",
+                             "handler" : self.on_open_file},
+                            {"separator" : True},
+                            {"text" : "Rename",
+                             "accel" : "<Control>M",
+                             "handler" : self.on_rename_current},
+                            {"stock" : gtk.STOCK_DELETE,
+                             "accel" : "K",
+                             "handler" : self.on_delete_current},
+                            {"separator" : True},
+                            {"text" : "Open in external viewer",
+                             "accel" : "X",
+                             "handler" : self.on_external_open},
+                            {"toggle" : "Enable embedded player",
+                             "accel" : "E",
+                             "key" : "embedded_toggle",
+                             "handler" : self.on_embedded_open},
+                            {"separator" : True},
+                            {"stock" : gtk.STOCK_QUIT,
+                             "accel" : "Q",
+                             "handler" : self.on_quit_app}]},
+                {"text" : "_Edit",
+                 "items" : [{"stock" : gtk.STOCK_UNDO,
+                             "accel" : "U",
+                             "key" : "undo",
+                             "sensitive" : False,
+                             "handler" : self.on_undo},
+                            {"separator" : True},
+                            {"text" : "Star/unstar image",
+                             "accel" : "S",
+                             "handler" : self.on_toggle_star},
+                            {"separator" : True},
+                            {"text" : "Select base directory",
+                             "accel" : "B",
+                             "handler" : self.on_select_base_dir},
+                            {"text" : "Move to target",
+                             "accel" : "M",
+                             "handler" : self.on_move_to_target},
+                            {"text" : "Reuse last target",
+                             "accel" : (gtk.keysyms.period, 0),
+                             "handler" : self.on_reuse_target}]},
+                {"text" : "_View",
+                 "items" : [{"toggle" : "Show toolbar",
+                             "active" : True,
+                             "accel" : "A",
+                             "key" : "toolbar_toggle",
+                             "handler" : self.on_toggle_toolbar},
+                            {"toggle" : "Show thumbnails",
+                             "active" : True,
+                             "accel" : "T",
+                             "key" : "thumbnails_toggle",
+                             "handler" : self.on_toggle_thumbnails},
+                            {"toggle" : "Show status bar",
+                             "active" : True,
+                             "accel" : "C",
+                             "key" : "status_bar_toggle",
+                             "handler" : self.on_toggle_status_bar},
+                            {"separator" : True},
+                            {"toggle" : "Zoom to fit",
+                             "active" : True,
+                             "accel" : "Z",
+                             "key" : "zoom_to_fit_toggle",
+                             "handler" : self.on_toggle_zoom},
+                            {"stock" : gtk.STOCK_ZOOM_IN,
+                             "accel" : (gtk.keysyms.plus, 0),
+                             "handler" : self.on_zoom_in},
+                            {"stock" : gtk.STOCK_ZOOM_OUT,
+                             "accel" : (gtk.keysyms.minus, 0),
+                             "handler" : self.on_zoom_out},
+                            {"separator" : True},
+                            {"toggle" : "Fullscreen",
+                             "accel" : "L",
+                             "key" : "fullscreen_toggle",
+                             "handler" : self.on_toggle_fullscreen}]},
+                {"text" : "_Image",
+                 "items" : [{"text" : "Rotate clockwise",
+                             "accel" : "R",
+                             "handler" : self.on_rotate_c},
+                            {"text" : "Rotate counter-clockwise",
+                             "accel" : "<Control>R",
+                             "handler" : self.on_rotate_cc},
+                            {"separator" : True},
+                            {"text" : "Flip horizontal",
+                             "accel" : "F",
+                             "handler" : self.on_flip_horizontal},
+                            {"text" : "Flip vertical",
+                             "accel" : "<Control>F",
+                             "handler" : self.on_flip_vertical}]},
+                {"text" : "_Go",
+                 "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
+                             "accel" : "H",
+                             "handler" : self.on_goto_first},
+                            {"stock" : gtk.STOCK_GOTO_LAST,
+                             "accel" : "End",
+                             "handler" : self.on_goto_last},
+                            {"separator" : True},
+                            {"stock" : gtk.STOCK_GO_FORWARD,
+                             "accel" : "Right",
+                             "handler" : self.on_go_forward},
+                            {"stock" : gtk.STOCK_GO_BACK,
+                             "accel" : "Left",
+                             "handler" : self.on_go_back},
+                            {"separator" : True},
+                            {"text" : "Jump forward",
+                             "accel" : "<Alt>Right",
+                             "handler" : self.on_jump_forward},
+                            {"stock" : "Jump back",
+                             "accel" : "<Alt>Left",
+                             "handler" : self.on_jump_back},
+                            {"separator" : True},
+                            {"menu" : {"text" : "Sort by",
+                                       "items" : [{"text" : "Date",
+                                                   "accel" : "D",
+                                                   "handler" : self.on_sort_by_date},
+                                                  {"text" : "Name",
+                                                   "accel" : "N",
+                                                   "handler" : self.on_sort_by_name},
+                                                  {"separator" : True},
+                                                  {"toggle" : "Inverted order",
+                                                   "key" : "inverted_order_toggle",
+                                                   "accel" : "I",
+                                                   "handler" : self.on_toggle_sort_order}]}}]},
+                {"text" : "_Pinbar",
+                 "items" : [{"toggle" : "Show pinbar",
+                             "accel" : "P",
+                             "active" : True,
+                             "key" : "pinbar_toggle",
+                             "handler" : self.on_show_pinbar},
+                            {"separator" : True},
+                            {"menu" : {"text" : "Send to",
+                                       "items" : [pinbar_send(0), pinbar_send(1), 
+                                                  pinbar_send(2), pinbar_send(3), 
+                                                  pinbar_send(4), pinbar_send(5), 
+                                                  pinbar_send(6), pinbar_send(7), 
+                                                  pinbar_send(8), pinbar_send(9),]}},
+                            {"menu" : {"text" : "Associate",
+                                       "items" : [pinbar_assoc(0), pinbar_assoc(1), 
+                                                  pinbar_assoc(2), pinbar_assoc(3), 
+                                                  pinbar_assoc(4), pinbar_assoc(5), 
+                                                  pinbar_assoc(6), pinbar_assoc(7), 
+                                                  pinbar_assoc(8), pinbar_assoc(9)]}}]},
+                {"text" : "_Help",
+                 "items" : [{"stock" : gtk.STOCK_ABOUT,
+                             "handler" : self.on_show_about}]}]
+
+    def build_toolbar(self, widget_dict):
+        toolbar = gtk.Toolbar()
+        toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
+        
+        button = gtk.ToolButton(gtk.STOCK_OPEN)
+        button.connect("clicked", self.on_open_file)
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_FILE)
+        button.connect("clicked", self.on_rename_current)
+        button.set_label("Rename")
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_REMOVE)
+        button.connect("clicked", self.on_delete_current)
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToolButton(gtk.STOCK_UNDO)
+        button.connect("clicked", self.on_undo)
+        button.set_sensitive(False)
+        widget_dict["undo_button"] = button
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
+        # XXX toggle on/off if image is starred
+        button = gtk.ToolButton(gtk.STOCK_ABOUT)
+        button.connect("clicked", self.on_toggle_star)
+        button.set_label("Star")
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_INDENT)
+        button.connect("clicked", self.on_move_to_target)
+        button.set_label("Move")
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_REFRESH)
+        button.connect("clicked", self.on_reuse_target)
+        button.set_label("Reuse")
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToggleToolButton(gtk.STOCK_ZOOM_FIT)
+        button.set_active(True)
+        button.connect("clicked", self.on_toggle_zoom)
+        widget_dict["zoom_to_fit_button"] = button
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
+        button.connect("clicked", self.on_zoom_in)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_ZOOM_OUT)
+        button.connect("clicked", self.on_zoom_out)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
+        button.connect("clicked", self.on_toggle_fullscreen)
+        widget_dict["fullscreen_button"] = button
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        # XXX rotate c
+        # XXX rotate cc
+        # XXX flip h
+        # XXX flip v
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
+        button = gtk.ToolButton(gtk.STOCK_GO_BACK)
+        button.connect("clicked", self.on_go_back)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
+        button.connect("clicked", self.on_go_forward)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GOTO_FIRST)
+        button.connect("clicked", self.on_goto_first)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GOTO_LAST)
+        button.connect("clicked", self.on_goto_last)
+        toolbar.insert(button, -1)
+
+        # XXX sort date
+        # XXX sort name
+        # XXX invert sort
+
+        return toolbar
 
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)

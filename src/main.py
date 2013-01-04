@@ -9,11 +9,13 @@ from filescanner import (FileTypeFilter,
                          get_files_from_args_recursive)
 from viewerapp import ViewerApp
 
+# TODO Filter for starred files
+# TODO Filter for filetypes
+
 # TODO Asynchronous loading of images
 # TODO Support for delete / undelete in Mac OS X
 # TODO Thumbnail view (complete, as a bar or both)
 # TODO Support for copying files
-# TODO Filter for starred files
 
 def check_directories(args):
     for arg in args:
