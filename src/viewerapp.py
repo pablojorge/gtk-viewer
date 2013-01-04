@@ -391,8 +391,6 @@ class ViewerApp:
         self.menu_bar, self.widget_dict = factory.get_menu_bar(self.window, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
-        # XXX move focus out of the toolbar
-
         # Toolbar
         self.toolbar = self.build_toolbar(self.widget_dict)
         vbox.pack_start(self.toolbar, False, False, 0)
@@ -469,6 +467,7 @@ class ViewerApp:
 
         # Show main window AFTER obtaining file list
         self.window.show_all()
+        self.window.set_focus(None)
 
     def get_menubar_entries(self, pinbar):
         pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
