@@ -1,0 +1,36 @@
+A: toggle toolbar
+B: select base dir
+C: show status bar
+D: sort by date
+E: embedded viewer
+F: flip horizontal
+C-F: flip vertical
+G: gif animation on/off
+H: goto first
+I: invert sort order
+J:
+K: delete
+L: full screen
+M: move
+C-M: rename
+N: sort by name
+O: open file
+P: toggle pinbar
+Q: quit
+R: rotate clock
+C-R: rotate counter-clock
+S: star/unstar image
+T: thumbnails on/off
+U: undo
+V: view image full
+X: external viewer
+Y:
+Z: toggle zoom mode
+.: reuse target
++: zoom in
+-: zoom out
+Left: go back
+Right: go forward
+End: go last
+1-9: send to pinbar bucket 'n'
+Control+1-9: change target of bucket 'n'

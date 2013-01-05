@@ -477,7 +477,6 @@ class ViewerApp:
                                   "accel" : "<Control>%i" % ((i+1)%10),
                                   "handler" : pinbar.on_associate(i)}
 
-        # XXX proper behavior of "embedded player"
         # XXX proper behavior of "Right/Left"
         # XXX disable reuse menuitem and toolbutton if no prev target
         return [{"text" : "_File",
@@ -495,10 +494,14 @@ class ViewerApp:
                             {"text" : "Open in external viewer",
                              "accel" : "X",
                              "handler" : self.on_external_open},
-                            {"toggle" : "Enable embedded player",
+                            {"text" : "Open in embedded viewer",
                              "accel" : "E",
-                             "key" : "embedded_toggle",
+                             "key" : "embedded_mitem",
                              "handler" : self.on_embedded_open},
+                            {"toggle" : "Enable animation",
+                             "accel" : "G",
+                             "key" : "animation_toggle",
+                             "handler" : self.on_enable_animation},
                             {"separator" : True},
                             {"stock" : gtk.STOCK_QUIT,
                              "accel" : "Q",
@@ -506,7 +509,7 @@ class ViewerApp:
                 {"text" : "_Edit",
                  "items" : [{"stock" : gtk.STOCK_UNDO,
                              "accel" : "U",
-                             "key" : "undo",
+                             "key" : "undo_mitem",
                              "sensitive" : False,
                              "handler" : self.on_undo},
                             {"separator" : True},
@@ -642,7 +645,7 @@ class ViewerApp:
         button.set_is_important(True)
         toolbar.insert(button, -1)
 
-        button = gtk.ToolButton(gtk.STOCK_REMOVE)
+        button = gtk.ToolButton(gtk.STOCK_DELETE)
         button.connect("clicked", self.on_delete_current)
         button.set_is_important(True)
         toolbar.insert(button, -1)
@@ -674,6 +677,22 @@ class ViewerApp:
         button.connect("clicked", self.on_reuse_target)
         button.set_label("Reuse")
         button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToolButton(gtk.STOCK_EXECUTE)
+        button.connect("clicked", self.on_external_open)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_CONVERT)
+        button.connect("clicked", self.on_embedded_open)
+        widget_dict["embedded_button"] = button
+        toolbar.insert(button, -1)
+
+        button = gtk.ToggleToolButton(gtk.STOCK_MEDIA_PLAY)
+        button.connect("clicked", self.on_enable_animation)
+        widget_dict["animation_button"] = button
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -826,11 +845,11 @@ class ViewerApp:
         self.reload_viewer()
 
     def on_undo_stack_push(self, item):
-        self.widget_dict["undo"].set_sensitive(True)
+        self.widget_dict["undo_mitem"].set_sensitive(True)
         self.widget_dict["undo_button"].set_sensitive(True)
 
     def on_undo_stack_empty(self):
-        self.widget_dict["undo"].set_sensitive(False)
+        self.widget_dict["undo_mitem"].set_sensitive(False)
         self.widget_dict["undo_button"].set_sensitive(False)
     ## 
 
@@ -847,13 +866,22 @@ class ViewerApp:
         if self.embedded_app:
             os.kill(self.embedded_app, signal.SIGTERM)
             self.embedded_app = None
+            self.window.queue_draw() # force to window to fully redraw
 
     def reload_viewer(self, force_stop=True):
         if force_stop:
             self.stop_embedded_app()
-        self.image_viewer.load(self.file_manager.get_current_file())
+
+        current_file = self.file_manager.get_current_file()
+        anim_enabled = self.widget_dict["animation_toggle"].get_active()
+        current_file.set_anim_enabled(anim_enabled)
+
+        self.image_viewer.load(current_file)
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
+
+        self.widget_dict["embedded_mitem"].set_sensitive(current_file.can_be_embedded())
+        self.widget_dict["embedded_button"].set_sensitive(current_file.can_be_embedded())
 
         self.widget_dict["zoom_to_fit_toggle"].set_active(True)
         self.widget_dict["zoom_to_fit_button"].set_active(True)
@@ -1121,6 +1149,11 @@ class ViewerApp:
         else:
             self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
             self.reload_viewer(force_stop=False)
+
+    def on_enable_animation(self, toggle):
+        self.widget_dict["animation_toggle"].set_active(toggle.get_active())
+        self.widget_dict["animation_button"].set_active(toggle.get_active())
+        self.reload_viewer(force_stop=False)
 
     def on_toggle_zoom(self, toggle):
         if toggle.get_active():

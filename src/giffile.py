@@ -7,13 +7,16 @@ class GIFFile(ImageFile):
     description = "gif"
     valid_extensions = ["gif"]
     pixbuf_anim_cache = Cache(10)
-    anim_toggle = False
 
-    def embedded_open(self, xid):
-        GIFFile.anim_toggle = not GIFFile.anim_toggle
+    def __init__(self, filename):
+        ImageFile.__init__(self, filename)
+        self.anim_enabled = False
+
+    def set_anim_enabled(self, enabled):
+        self.anim_enabled = enabled
 
     def draw(self, widget, width, height):
-        if GIFFile.anim_toggle:
+        if self.anim_enabled:
             widget.set_from_animation(self.get_pixbuf_anim_at_size(width, height))
         else:
             widget.set_from_pixbuf(self.get_pixbuf_at_size(width, height))

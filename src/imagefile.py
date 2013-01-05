@@ -101,6 +101,12 @@ class File:
     def embedded_open(self, xid):
         pass
 
+    def set_anim_enabled(self, enable):
+        pass
+
+    def can_be_embedded(self):
+        return False
+
 class ImageFile(File):
     description = "image"
     pixbuf_cache = Cache(10)

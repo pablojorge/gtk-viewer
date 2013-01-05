@@ -58,3 +58,6 @@ class VideoFile(ImageFile):
                                  stderr=subprocess.PIPE)
         return popen.pid
 
+    def can_be_embedded(self):
+        return True
+
