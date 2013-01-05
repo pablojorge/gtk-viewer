@@ -392,6 +392,7 @@ class ViewerApp:
         vbox.pack_start(self.menu_bar, False, False, 0)
 
         # Toolbar
+        self.load_icons() # load icons first
         self.toolbar = self.build_toolbar(self.widget_dict)
         vbox.pack_start(self.toolbar, False, False, 0)
 
@@ -718,21 +719,24 @@ class ViewerApp:
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
 
-        # XXX rotate c
-        # XXX rotate cc
-        # XXX flip h
-        # XXX flip v
+        button = gtk.ToolButton("rotate-counter-clockwise")
+        button.connect("clicked", self.on_rotate_cc)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton("rotate-clockwise")
+        button.connect("clicked", self.on_rotate_c)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton("flip-horizontal")
+        button.connect("clicked", self.on_flip_horizontal)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton("flip-vertical")
+        button.connect("clicked", self.on_flip_vertical)
+        toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
-        button = gtk.ToolButton(gtk.STOCK_GO_BACK)
-        button.connect("clicked", self.on_go_back)
-        toolbar.insert(button, -1)
-
-        button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
-        button.connect("clicked", self.on_go_forward)
-        toolbar.insert(button, -1)
-
         button = gtk.ToolButton(gtk.STOCK_GOTO_FIRST)
         button.connect("clicked", self.on_goto_first)
         toolbar.insert(button, -1)
@@ -741,11 +745,47 @@ class ViewerApp:
         button.connect("clicked", self.on_goto_last)
         toolbar.insert(button, -1)
 
+        button = gtk.ToolButton(gtk.STOCK_MEDIA_REWIND)
+        button.connect("clicked", self.on_jump_back)
+        button.set_label("Jump back")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_MEDIA_FORWARD)
+        button.connect("clicked", self.on_jump_forward)
+        button.set_label("Jump forward")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GO_BACK)
+        button.connect("clicked", self.on_go_back)
+        button.set_label("Previous")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
+        button.connect("clicked", self.on_go_forward)
+        button.set_label("Next")
+        toolbar.insert(button, -1)
+
         # XXX sort date
         # XXX sort name
         # XXX invert sort
 
         return toolbar
+
+    def load_icons(self):
+        factory = gtk.IconFactory()
+
+        icons = [("rotate-clockwise", "icons/rotate-clockwise.png"),
+                 ("rotate-counter-clockwise", "icons/rotate-counter-clockwise.png"),
+                 ("flip-horizontal", "icons/flip-horizontal.png"),
+                 ("flip-vertical", "icons/flip-vertical.png")]
+
+        for icon_id, filename in icons:
+            pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
+            iconset = gtk.IconSet(pixbuf)
+            factory.add(icon_id, iconset)
+
+        factory.add_default()
+
 
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)
