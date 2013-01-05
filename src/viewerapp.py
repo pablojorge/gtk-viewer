@@ -606,6 +606,7 @@ class ViewerApp:
                                                   {"separator" : True},
                                                   {"toggle" : "Inverted order",
                                                    "key" : "inverted_order_toggle",
+                                                   "sensitive" : False,
                                                    "accel" : "I",
                                                    "handler" : self.on_toggle_sort_order}]}}]},
                 {"text" : "_Pinbar",
@@ -637,18 +638,18 @@ class ViewerApp:
         
         button = gtk.ToolButton(gtk.STOCK_OPEN)
         button.connect("clicked", self.on_open_file)
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
-        button = gtk.ToolButton(gtk.STOCK_FILE)
+        button = gtk.ToolButton(gtk.STOCK_SAVE_AS)
         button.connect("clicked", self.on_rename_current)
         button.set_label("Rename")
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_DELETE)
         button.connect("clicked", self.on_delete_current)
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -665,19 +666,19 @@ class ViewerApp:
         button = gtk.ToolButton(gtk.STOCK_ABOUT)
         button.connect("clicked", self.on_toggle_star)
         button.set_label("Star")
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_INDENT)
         button.connect("clicked", self.on_move_to_target)
         button.set_label("Move")
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_REFRESH)
         button.connect("clicked", self.on_reuse_target)
         button.set_label("Reuse")
-        button.set_is_important(True)
+        #button.set_is_important(True)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -765,9 +766,15 @@ class ViewerApp:
         button.set_label("Next")
         toolbar.insert(button, -1)
 
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
         # XXX sort date
         # XXX sort name
-        # XXX invert sort
+        button = gtk.ToolButton("sort-ascending")
+        button.connect("clicked", self.on_toggle_sort_order)
+        button.set_sensitive(False)
+        widget_dict["inverted_order_button"] = button
+        toolbar.insert(button, -1)
 
         return toolbar
 
@@ -777,7 +784,10 @@ class ViewerApp:
         icons = [("rotate-clockwise", "icons/rotate-clockwise.png"),
                  ("rotate-counter-clockwise", "icons/rotate-counter-clockwise.png"),
                  ("flip-horizontal", "icons/flip-horizontal.png"),
-                 ("flip-vertical", "icons/flip-vertical.png")]
+                 ("flip-vertical", "icons/flip-vertical.png"),
+                 ("sort-by-date", "icons/sort-by-date-1.png"),
+                 ("sort-ascending", "icons/sort-ascending.png"),
+                 ("sort-descending", "icons/sort-descending.png")]
 
         for icon_id, filename in icons:
             pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
@@ -1167,15 +1177,31 @@ class ViewerApp:
 
     def on_sort_by_date(self, _):
         self.files_order = "Date"
+        self.widget_dict["inverted_order_toggle"].set_sensitive(True)
+        self.widget_dict["inverted_order_button"].set_sensitive(True)
         self.reorder_files()
 
     def on_sort_by_name(self, _):
         self.files_order = "Name"
+        self.widget_dict["inverted_order_toggle"].set_sensitive(True)
+        self.widget_dict["inverted_order_button"].set_sensitive(True)
         self.reorder_files()
 
-    def on_toggle_sort_order(self, toggle):
+    def on_toggle_sort_order(self, widget):
         if not self.files_order:
             return
+
+        inverted_order_toggle = self.widget_dict["inverted_order_toggle"]
+        inverted_order_button = self.widget_dict["inverted_order_button"]
+
+        if widget is inverted_order_button:
+            inverted_order_toggle.set_active(not inverted_order_toggle.get_active())
+
+        if inverted_order_toggle.get_active():
+            inverted_order_button.set_stock_id("sort-descending")
+        else:
+            inverted_order_button.set_stock_id("sort-ascending")
+
         self.reorder_files()
 
     def on_external_open(self, _):
