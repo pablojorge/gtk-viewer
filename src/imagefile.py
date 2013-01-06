@@ -2,6 +2,7 @@ import os
 import time
 import shutil
 import hashlib
+import string
 
 import gtk
 
@@ -45,6 +46,8 @@ class Datetime:
         return time.strftime("%a %b %d %Y %X", time.localtime(self.datetime))
 
 class File:
+    star_marker = " (S)"
+
     def __init__(self, filename):
         self.filename = filename
 
@@ -97,6 +100,20 @@ class File:
 
     def external_open(self):
         external_open(self.filename)
+
+    def is_starred(self):
+        name, sep, ext = self.get_basename().rpartition(".")
+        return name.endswith(self.star_marker)
+
+    def set_starred(self, starred):
+        assert(self.is_starred() != starred)
+        name, sep, ext = self.get_basename().rpartition(".")
+        if starred:
+            new_name = name + self.star_marker
+        else: 
+            new_name = name.replace(self.star_marker, "")
+        self.rename(os.path.join(self.get_dirname(), 
+                                 string.join((new_name, ext), sep)))
 
     def embedded_open(self, xid):
         pass

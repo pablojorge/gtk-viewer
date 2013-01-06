@@ -15,6 +15,18 @@ from imageviewer import ImageViewer, ThumbnailViewer
 from filescanner import get_files_from_args
 from utils import get_process_memory_usage
 
+class BlockedWidget:
+    def __init__(self, widget_dict, widget_id):
+        self.widget = widget_dict[widget_id]
+        self.handler_id = widget_dict[widget_id + "_handler"]
+
+    def __enter__(self):
+        self.widget.handler_block(self.handler_id)
+        return self.widget
+
+    def __exit__(self, *tb_info):
+        self.widget.handler_unblock(self.handler_id)
+
 class AutoScrolledWindow:
     def __init__(self, child, bg_color, on_special_drag_left, 
                                         on_special_drag_right, 
@@ -186,7 +198,10 @@ class WidgetFactory:
 
             # Connect handler if available:
             if item.has_key("handler"):
-                mitem.connect("activate", item["handler"])
+                handler_id = mitem.connect("activate", item["handler"])
+
+                if item.has_key("key"):
+                    widget_dict[item["key"] + "_handler"] = handler_id
 
             # Add it to the menu:
             gmenu.append(mitem)
@@ -514,7 +529,8 @@ class ViewerApp:
                              "sensitive" : False,
                              "handler" : self.on_undo},
                             {"separator" : True},
-                            {"text" : "Star/unstar image",
+                            {"toggle" : "Star image",
+                             "key" : "star_toggle",
                              "accel" : "S",
                              "handler" : self.on_toggle_star},
                             {"separator" : True},
@@ -637,65 +653,69 @@ class ViewerApp:
     def build_toolbar(self, widget_dict):
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
+
+        tooltips = gtk.Tooltips()
+        toolbar.set_tooltips(True)
         
         button = gtk.ToolButton(gtk.STOCK_OPEN)
         button.connect("clicked", self.on_open_file)
-        #button.set_is_important(True)
+        button.set_tooltip(tooltips, "Open")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_SAVE_AS)
         button.connect("clicked", self.on_rename_current)
-        button.set_label("Rename")
-        #button.set_is_important(True)
+        button.set_tooltip(tooltips, "Rename")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_DELETE)
         button.connect("clicked", self.on_delete_current)
-        #button.set_is_important(True)
+        button.set_tooltip(tooltips, "Delete")
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
 
         button = gtk.ToolButton(gtk.STOCK_UNDO)
         button.connect("clicked", self.on_undo)
+        button.set_tooltip(tooltips, "Undo")
         button.set_sensitive(False)
         widget_dict["undo_button"] = button
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
-        # XXX toggle on/off if image is starred
-        button = gtk.ToolButton(gtk.STOCK_ABOUT)
-        button.connect("clicked", self.on_toggle_star)
-        button.set_label("Star")
-        #button.set_is_important(True)
+        button = gtk.ToggleToolButton(gtk.STOCK_ABOUT)
+        handler_id = button.connect("clicked", self.on_toggle_star)
+        button.set_tooltip(tooltips, "Star")
+        widget_dict["star_button"] = button
+        widget_dict["star_button_handler"] = handler_id
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_INDENT)
         button.connect("clicked", self.on_move_to_target)
-        button.set_label("Move")
-        #button.set_is_important(True)
+        button.set_tooltip(tooltips, "Move")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_REFRESH)
         button.connect("clicked", self.on_reuse_target)
-        button.set_label("Reuse")
-        #button.set_is_important(True)
+        button.set_tooltip(tooltips, "Reuse")
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
 
         button = gtk.ToolButton(gtk.STOCK_EXECUTE)
         button.connect("clicked", self.on_external_open)
+        button.set_tooltip(tooltips, "External open")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_CONVERT)
         button.connect("clicked", self.on_embedded_open)
+        button.set_tooltip(tooltips, "Embedded open")
         widget_dict["embedded_button"] = button
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_MEDIA_PLAY)
         button.connect("clicked", self.on_enable_animation)
+        button.set_tooltip(tooltips, "Enable animation")
         widget_dict["animation_button"] = button
         toolbar.insert(button, -1)
 
@@ -704,19 +724,23 @@ class ViewerApp:
         button = gtk.ToggleToolButton(gtk.STOCK_ZOOM_FIT)
         button.set_active(True)
         button.connect("clicked", self.on_toggle_zoom)
+        button.set_tooltip(tooltips, "Toggle zoom mode")
         widget_dict["zoom_to_fit_button"] = button
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
         button.connect("clicked", self.on_zoom_in)
+        button.set_tooltip(tooltips, "Zoom in")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_ZOOM_OUT)
         button.connect("clicked", self.on_zoom_out)
+        button.set_tooltip(tooltips, "Zoom out")
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
         button.connect("clicked", self.on_toggle_fullscreen)
+        button.set_tooltip(tooltips, "Enable fullscreen")
         widget_dict["fullscreen_button"] = button
         toolbar.insert(button, -1)
 
@@ -724,64 +748,73 @@ class ViewerApp:
 
         button = gtk.ToolButton("rotate-counter-clockwise")
         button.connect("clicked", self.on_rotate_cc)
+        button.set_tooltip(tooltips, "Rotate counter-clockwise")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton("rotate-clockwise")
         button.connect("clicked", self.on_rotate_c)
+        button.set_tooltip(tooltips, "Rotate clockwise")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton("flip-horizontal")
         button.connect("clicked", self.on_flip_horizontal)
+        button.set_tooltip(tooltips, "Flip horizontal")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton("flip-vertical")
         button.connect("clicked", self.on_flip_vertical)
+        button.set_tooltip(tooltips, "Flip vertical")
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
         button = gtk.ToolButton(gtk.STOCK_GOTO_FIRST)
         button.connect("clicked", self.on_goto_first)
+        button.set_tooltip(tooltips, "Go to first file")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_GOTO_LAST)
         button.connect("clicked", self.on_goto_last)
+        button.set_tooltip(tooltips, "Go to last file")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_MEDIA_REWIND)
         button.connect("clicked", self.on_jump_back)
-        button.set_label("Jump back")
+        button.set_tooltip(tooltips, "Jump back")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_MEDIA_FORWARD)
         button.connect("clicked", self.on_jump_forward)
-        button.set_label("Jump forward")
+        button.set_tooltip(tooltips, "Jump forward")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_GO_BACK)
         button.connect("clicked", self.on_go_back)
-        button.set_label("Previous")
+        button.set_tooltip(tooltips, "Previous")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_GO_FORWARD)
         button.connect("clicked", self.on_go_forward)
-        button.set_label("Next")
+        button.set_tooltip(tooltips, "Next")
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
         button = gtk.ToggleToolButton(gtk.STOCK_ITALIC)
         button.connect("clicked", self.on_sort_by_name)
+        button.set_tooltip(tooltips, "Sort by name")
         widget_dict["sort_by_name_button"] = button
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton("sort-by-date")
         button.connect("clicked", self.on_sort_by_date)
+        button.set_tooltip(tooltips, "Sort by date")
         widget_dict["sort_by_date_button"] = button
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton("sort-ascending")
         button.connect("clicked", self.on_toggle_sort_order)
+        button.set_tooltip(tooltips, "Toggle sort order")
         button.set_sensitive(False)
         widget_dict["inverted_order_button"] = button
         toolbar.insert(button, -1)
@@ -936,15 +969,26 @@ class ViewerApp:
         anim_enabled = self.widget_dict["animation_toggle"].get_active()
         current_file.set_anim_enabled(anim_enabled)
 
+        # Handle star toggle
+        with BlockedWidget(self.widget_dict, "star_toggle") as star_toggle:
+            star_toggle.set_active(current_file.is_starred()) 
+
+        with BlockedWidget(self.widget_dict, "star_button") as star_button:
+            star_button.set_active(current_file.is_starred()) 
+
+        # Update main viewer and thumbnails
         self.image_viewer.load(current_file)
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
 
+        # Handle embedded buttons
         self.widget_dict["embedded_mitem"].set_sensitive(current_file.can_be_embedded())
         self.widget_dict["embedded_button"].set_sensitive(current_file.can_be_embedded())
 
+        # Reset zoom toggle
         self.widget_dict["zoom_to_fit_toggle"].set_active(True)
         self.widget_dict["zoom_to_fit_button"].set_active(True)
+
         self.fit_viewer(force=True)
         self.refresh_info()
 

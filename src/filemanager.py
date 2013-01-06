@@ -1,5 +1,4 @@
 import os
-import string
 
 from filefactory import FileFactory
 
@@ -157,21 +156,17 @@ class FileManager:
     def toggle_star(self):
         current = self.get_current_file()
         orig_index = self.get_current_index()
-        orig_name = current.get_basename()
-        name, sep, ext = orig_name.rpartition(".")
-        star_marker = " (S)"
-        was_starred = name.endswith(star_marker)
-        new_name = name.replace(star_marker, "") if was_starred else name + star_marker
-        current.rename(os.path.join(current.get_dirname(), string.join((new_name, ext), sep)))
+        prev_status = current.is_starred()
+        current.set_starred(not prev_status)
         self.on_list_modified()
 
         def undo_action():
-            current.rename(os.path.join(current.get_dirname(), orig_name))
+            current.set_starred(prev_status)
             self.index = orig_index # XXX podria no existir mas
             self.on_list_modified()
 
         return Action(Action.NORMAL,
-                      "'%s' %s" % (orig_name, "unstarred" if was_starred else "starred"),
+                      "'%s' %s" % (current.get_basename(), "unstarred" if prev_status else "starred"),
                       undo_action)
 
     # Internal helpers:
