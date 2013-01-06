@@ -16,9 +16,9 @@ from filescanner import get_files_from_args
 from utils import get_process_memory_usage
 
 class BlockedWidget:
-    def __init__(self, widget_dict, widget_id):
-        self.widget = widget_dict[widget_id]
-        self.handler_id = widget_dict[widget_id + "_handler"]
+    def __init__(self, widget, handler_id):
+        self.widget = widget
+        self.handler_id = handler_id
 
     def __enter__(self):
         self.widget.handler_block(self.handler_id)
@@ -26,6 +26,21 @@ class BlockedWidget:
 
     def __exit__(self, *tb_info):
         self.widget.handler_unblock(self.handler_id)
+
+class WidgetManager:
+    def __init__(self):
+        self.widget_dict = {}
+
+    def add_widget(self, key, widget, handler_id):
+        self.widget_dict[key] = widget
+        self.widget_dict[key + "_handler"] = handler_id
+
+    def get(self, key):
+        return self.widget_dict[key]
+
+    def get_blocked(self, key):
+        return BlockedWidget(self.widget_dict[key],
+                             self.widget_dict[key + "_handler"])
 
 class AutoScrolledWindow:
     def __init__(self, child, bg_color, on_special_drag_left, 
@@ -162,7 +177,7 @@ class WidgetFactory:
 
         return ebox
 
-    def get_menu(self, menu, widget_dict, accel_group):
+    def get_menu(self, menu, widget_manager, accel_group):
         gmenu = gtk.Menu()
         gitem = gtk.MenuItem(menu["text"])
         gitem.set_submenu(gmenu)
@@ -170,7 +185,7 @@ class WidgetFactory:
         for item in menu["items"]:
             # Create menu item depending on type:
             if item.has_key("menu"):
-                mitem = self.get_menu(item["menu"], widget_dict, accel_group)
+                mitem = self.get_menu(item["menu"], widget_manager, accel_group)
             elif item.has_key("text"):
                 mitem = gtk.MenuItem(item["text"])
             elif item.has_key("stock"):
@@ -190,35 +205,33 @@ class WidgetFactory:
                     key, mod = accel
                 mitem.add_accelerator("activate", accel_group, key, mod, gtk.ACCEL_VISIBLE)
 
-            if item.has_key("key"):
-                widget_dict[item["key"]] = mitem
-
             if item.has_key("sensitive"):
                 mitem.set_sensitive(item["sensitive"])
 
             # Connect handler if available:
             if item.has_key("handler"):
                 handler_id = mitem.connect("activate", item["handler"])
+            else:
+                handler_id = None
 
-                if item.has_key("key"):
-                    widget_dict[item["key"] + "_handler"] = handler_id
+            if item.has_key("key"):
+                widget_manager.add_widget(item["key"], mitem, handler_id)
 
             # Add it to the menu:
             gmenu.append(mitem)
         
         return gitem
 
-    def get_menu_bar(self, window, menus):
+    def get_menu_bar(self, window, widget_manager, menus):
         menu_bar = gtk.MenuBar()
-        widget_dict = {}
 
         accel_group = gtk.AccelGroup()
         window.add_accel_group(accel_group)
 
         for menu in menus:
-            menu_bar.append(self.get_menu(menu, widget_dict, accel_group))
+            menu_bar.append(self.get_menu(menu, widget_manager, accel_group))
 
-        return menu_bar, widget_dict
+        return menu_bar
 
 class Pinbar:
     THUMB_COUNT = 10
@@ -388,6 +401,7 @@ class ViewerApp:
 
         ### Window composition
         factory = WidgetFactory()
+        self.widget_manager = WidgetManager()
 
         self.window = factory.get_window(width=self.DEF_WIDTH, 
                                          height=self.DEF_HEIGHT,
@@ -403,12 +417,12 @@ class ViewerApp:
 
         # Menubar
         menus = self.get_menubar_entries(self.pinbar)
-        self.menu_bar, self.widget_dict = factory.get_menu_bar(self.window, menus)
+        self.menu_bar = factory.get_menu_bar(self.window, self.widget_manager, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
         # Toolbar
         self.load_icons() # load icons first
-        self.toolbar = self.build_toolbar(self.widget_dict)
+        self.toolbar = self.build_toolbar(self.widget_manager)
         vbox.pack_start(self.toolbar, False, False, 0)
 
         # Pinbar (pack it AFTER the toolbar)
@@ -650,7 +664,7 @@ class ViewerApp:
                  "items" : [{"stock" : gtk.STOCK_ABOUT,
                              "handler" : self.on_show_about}]}]
 
-    def build_toolbar(self, widget_dict):
+    def build_toolbar(self, widget_manager):
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
 
@@ -675,10 +689,10 @@ class ViewerApp:
         toolbar.insert(gtk.SeparatorToolItem(), -1)
 
         button = gtk.ToolButton(gtk.STOCK_UNDO)
-        button.connect("clicked", self.on_undo)
+        handler_id = button.connect("clicked", self.on_undo)
         button.set_tooltip(tooltips, "Undo")
         button.set_sensitive(False)
-        widget_dict["undo_button"] = button
+        widget_manager.add_widget("undo_button", button, handler_id)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -686,8 +700,7 @@ class ViewerApp:
         button = gtk.ToggleToolButton(gtk.STOCK_ABOUT)
         handler_id = button.connect("clicked", self.on_toggle_star)
         button.set_tooltip(tooltips, "Star")
-        widget_dict["star_button"] = button
-        widget_dict["star_button_handler"] = handler_id
+        widget_manager.add_widget("star_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_INDENT)
@@ -708,24 +721,24 @@ class ViewerApp:
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_CONVERT)
-        button.connect("clicked", self.on_embedded_open)
+        handler_id = button.connect("clicked", self.on_embedded_open)
         button.set_tooltip(tooltips, "Embedded open")
-        widget_dict["embedded_button"] = button
+        widget_manager.add_widget("embedded_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_MEDIA_PLAY)
-        button.connect("clicked", self.on_enable_animation)
+        handler_id = button.connect("clicked", self.on_enable_animation)
         button.set_tooltip(tooltips, "Enable animation")
-        widget_dict["animation_button"] = button
+        widget_manager.add_widget("animation_button", button, handler_id)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_ZOOM_FIT)
         button.set_active(True)
-        button.connect("clicked", self.on_toggle_zoom)
+        handler_id = button.connect("clicked", self.on_toggle_zoom)
         button.set_tooltip(tooltips, "Toggle zoom mode")
-        widget_dict["zoom_to_fit_button"] = button
+        widget_manager.add_widget("zoom_to_fit_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_ZOOM_IN)
@@ -739,9 +752,9 @@ class ViewerApp:
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_FULLSCREEN)
-        button.connect("clicked", self.on_toggle_fullscreen)
+        handler_id = button.connect("clicked", self.on_toggle_fullscreen)
         button.set_tooltip(tooltips, "Enable fullscreen")
-        widget_dict["fullscreen_button"] = button
+        widget_manager.add_widget("fullscreen_button", button, handler_id)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -801,22 +814,22 @@ class ViewerApp:
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
         button = gtk.ToggleToolButton(gtk.STOCK_ITALIC)
-        button.connect("clicked", self.on_sort_by_name)
+        handler_id = button.connect("clicked", self.on_sort_by_name)
         button.set_tooltip(tooltips, "Sort by name")
-        widget_dict["sort_by_name_button"] = button
+        widget_manager.add_widget("sort_by_name_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton("sort-by-date")
-        button.connect("clicked", self.on_sort_by_date)
+        handler_id = button.connect("clicked", self.on_sort_by_date)
         button.set_tooltip(tooltips, "Sort by date")
-        widget_dict["sort_by_date_button"] = button
+        widget_manager.add_widget("sort_by_date_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton("sort-ascending")
-        button.connect("clicked", self.on_toggle_sort_order)
+        handler_id = button.connect("clicked", self.on_toggle_sort_order)
         button.set_tooltip(tooltips, "Toggle sort order")
         button.set_sensitive(False)
-        widget_dict["inverted_order_button"] = button
+        widget_manager.add_widget("inverted_order_button", button, handler_id)
         toolbar.insert(button, -1)
 
         return toolbar
@@ -843,7 +856,6 @@ class ViewerApp:
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)
 
-        self.files_order = None
         self.undo_stack.clear()
 
         if start_file:
@@ -892,8 +904,8 @@ class ViewerApp:
 
         old_size = self.image_viewer.get_scaled_size()
 
-        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
-        self.widget_dict["zoom_to_fit_button"].set_active(False)
+        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
+        self.widget_manager.get("zoom_to_fit_button").set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
         self.refresh_info()
 
@@ -938,12 +950,12 @@ class ViewerApp:
         self.reload_viewer()
 
     def on_undo_stack_push(self, item):
-        self.widget_dict["undo_mitem"].set_sensitive(True)
-        self.widget_dict["undo_button"].set_sensitive(True)
+        self.widget_manager.get("undo_mitem").set_sensitive(True)
+        self.widget_manager.get("undo_button").set_sensitive(True)
 
     def on_undo_stack_empty(self):
-        self.widget_dict["undo_mitem"].set_sensitive(False)
-        self.widget_dict["undo_button"].set_sensitive(False)
+        self.widget_manager.get("undo_mitem").set_sensitive(False)
+        self.widget_manager.get("undo_button").set_sensitive(False)
     ## 
 
     ## Internal helpers
@@ -966,14 +978,14 @@ class ViewerApp:
             self.stop_embedded_app()
 
         current_file = self.file_manager.get_current_file()
-        anim_enabled = self.widget_dict["animation_toggle"].get_active()
+        anim_enabled = self.widget_manager.get("animation_toggle").get_active()
         current_file.set_anim_enabled(anim_enabled)
 
         # Handle star toggle
-        with BlockedWidget(self.widget_dict, "star_toggle") as star_toggle:
+        with self.widget_manager.get_blocked("star_toggle") as star_toggle:
             star_toggle.set_active(current_file.is_starred()) 
 
-        with BlockedWidget(self.widget_dict, "star_button") as star_button:
+        with self.widget_manager.get_blocked("star_button") as star_button:
             star_button.set_active(current_file.is_starred()) 
 
         # Update main viewer and thumbnails
@@ -982,12 +994,12 @@ class ViewerApp:
         self.th_right.load(self.file_manager.get_next_file())
 
         # Handle embedded buttons
-        self.widget_dict["embedded_mitem"].set_sensitive(current_file.can_be_embedded())
-        self.widget_dict["embedded_button"].set_sensitive(current_file.can_be_embedded())
+        self.widget_manager.get("embedded_mitem").set_sensitive(current_file.can_be_embedded())
+        self.widget_manager.get("embedded_button").set_sensitive(current_file.can_be_embedded())
 
         # Reset zoom toggle
-        self.widget_dict["zoom_to_fit_toggle"].set_active(True)
-        self.widget_dict["zoom_to_fit_button"].set_active(True)
+        self.widget_manager.get("zoom_to_fit_toggle").set_active(True)
+        self.widget_manager.get("zoom_to_fit_button").set_active(True)
 
         self.fit_viewer(force=True)
         self.refresh_info()
@@ -1039,7 +1051,7 @@ class ViewerApp:
             span += ">%s</span>" % last_action.description
             file_info += "\n<i>Last action:</i> " + span
 
-        inverse_order = self.widget_dict["inverted_order_toggle"].active
+        inverse_order = self.widget_manager.get("inverted_order_toggle").active
         file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s %s" % \
                      (self.file_manager.get_current_index() + 1, 
                       self.file_manager.get_list_length(),
@@ -1054,7 +1066,8 @@ class ViewerApp:
         self.file_index.set_justify(gtk.JUSTIFY_RIGHT)
 
     def reorder_files(self):
-        inverse_order = self.widget_dict["inverted_order_toggle"].active
+        inverse_order = self.widget_manager.get("inverted_order_toggle").active
+
         if self.files_order == "Date":
             self.file_manager.sort_by_date(inverse_order)
         elif self.files_order == "Name":
@@ -1097,15 +1110,15 @@ class ViewerApp:
         else:
             self.window.unfullscreen()
 
-        self.widget_dict["fullscreen_toggle"].set_active(toggle.get_active())
-        self.widget_dict["fullscreen_button"].set_active(toggle.get_active())
+        self.widget_manager.get("fullscreen_toggle").set_active(toggle.get_active())
+        self.widget_manager.get("fullscreen_button").set_active(toggle.get_active())
 
     def on_toggle_fullview(self, _):
-        fullscreen_on = self.widget_dict["fullscreen_toggle"].active
-        toolbar_on = self.widget_dict["toolbar_toggle"].active
-        pinbar_on = self.widget_dict["pinbar_toggle"].active
-        thumbnails_on = self.widget_dict["thumbnails_toggle"].active
-        status_bar_on = self.widget_dict["status_bar_toggle"].active
+        fullscreen_on = self.widget_manager.get("fullscreen_toggle").active
+        toolbar_on = self.widget_manager.get("toolbar_toggle").active
+        pinbar_on = self.widget_manager.get("pinbar_toggle").active
+        thumbnails_on = self.widget_manager.get("thumbnails_toggle").active
+        status_bar_on = self.widget_manager.get("status_bar_toggle").active
 
         if not self.fullview_active:
             if not fullscreen_on:
@@ -1230,34 +1243,32 @@ class ViewerApp:
         self.undo_stack.push(self.file_manager.delete_current())
 
     def on_sort_by_date(self, widget):
-        if widget.get_active() == False:
-            return
-
         self.files_order = "Date"
 
-        self.widget_dict["inverted_order_toggle"].set_sensitive(True)
-        self.widget_dict["inverted_order_button"].set_sensitive(True)
+        self.widget_manager.get("inverted_order_toggle").set_sensitive(True)
+        self.widget_manager.get("inverted_order_button").set_sensitive(True)
 
-        self.widget_dict["sort_by_date_toggle"].set_active(True)
-        self.widget_dict["sort_by_date_button"].set_active(True)
-        self.widget_dict["sort_by_name_toggle"].set_active(False)
-        self.widget_dict["sort_by_name_button"].set_active(False)
+        for widget_id, active in [("sort_by_date_toggle", True),
+                                  ("sort_by_date_button", True),
+                                  ("sort_by_name_toggle", False),
+                                  ("sort_by_name_button", False)]:
+            with self.widget_manager.get_blocked(widget_id) as widget:
+                widget.set_active(active)
 
         self.reorder_files()
 
     def on_sort_by_name(self, widget):
-        if widget.get_active() == False:
-            return
-
         self.files_order = "Name"
 
-        self.widget_dict["inverted_order_toggle"].set_sensitive(True)
-        self.widget_dict["inverted_order_button"].set_sensitive(True)
+        self.widget_manager.get("inverted_order_toggle").set_sensitive(True)
+        self.widget_manager.get("inverted_order_button").set_sensitive(True)
 
-        self.widget_dict["sort_by_name_toggle"].set_active(True)
-        self.widget_dict["sort_by_name_button"].set_active(True)
-        self.widget_dict["sort_by_date_toggle"].set_active(False)
-        self.widget_dict["sort_by_date_button"].set_active(False)
+        for widget_id, active in [("sort_by_name_toggle", True),
+                                  ("sort_by_name_button", True),
+                                  ("sort_by_date_toggle", False),
+                                  ("sort_by_date_button", False)]:
+            with self.widget_manager.get_blocked(widget_id) as widget:
+                widget.set_active(active)
 
         self.reorder_files()
 
@@ -1265,8 +1276,8 @@ class ViewerApp:
         if not self.files_order:
             return
 
-        inverted_order_toggle = self.widget_dict["inverted_order_toggle"]
-        inverted_order_button = self.widget_dict["inverted_order_button"]
+        inverted_order_toggle = self.widget_manager.get("inverted_order_toggle")
+        inverted_order_button = self.widget_manager.get("inverted_order_button")
 
         if widget is inverted_order_button:
             inverted_order_toggle.set_active(not inverted_order_toggle.get_active())
@@ -1291,8 +1302,8 @@ class ViewerApp:
             self.reload_viewer(force_stop=False)
 
     def on_enable_animation(self, toggle):
-        self.widget_dict["animation_toggle"].set_active(toggle.get_active())
-        self.widget_dict["animation_button"].set_active(toggle.get_active())
+        self.widget_manager.get("animation_toggle").set_active(toggle.get_active())
+        self.widget_manager.get("animation_button").set_active(toggle.get_active())
         self.reload_viewer(force_stop=False)
 
     def on_toggle_zoom(self, toggle):
@@ -1301,20 +1312,20 @@ class ViewerApp:
         else:
             self.image_viewer.zoom_at(100)
 
-        self.widget_dict["zoom_to_fit_toggle"].set_active(toggle.get_active())
-        self.widget_dict["zoom_to_fit_button"].set_active(toggle.get_active())
+        self.widget_manager.get("zoom_to_fit_toggle").set_active(toggle.get_active())
+        self.widget_manager.get("zoom_to_fit_button").set_active(toggle.get_active())
 
         self.refresh_info()
 
     def on_zoom_in(self, _):
-        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
-        self.widget_dict["zoom_to_fit_button"].set_active(False)
+        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
+        self.widget_manager.get("zoom_to_fit_button").set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
         self.refresh_info()
 
     def on_zoom_out(self, _):
-        self.widget_dict["zoom_to_fit_toggle"].set_active(False)
-        self.widget_dict["zoom_to_fit_button"].set_active(False)
+        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
+        self.widget_manager.get("zoom_to_fit_button").set_active(False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
