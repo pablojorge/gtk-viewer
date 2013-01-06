@@ -596,13 +596,15 @@ class ViewerApp:
                              "accel" : "<Alt>Left",
                              "handler" : self.on_jump_back},
                             {"separator" : True},
-                            {"menu" : {"text" : "Sort by",
-                                       "items" : [{"text" : "Date",
-                                                   "accel" : "D",
-                                                   "handler" : self.on_sort_by_date},
-                                                  {"text" : "Name",
+                            {"menu" : {"text" : "Sort by ...",
+                                       "items" : [{"toggle" : "Sort by name",
                                                    "accel" : "N",
+                                                   "key" : "sort_by_name_toggle",
                                                    "handler" : self.on_sort_by_name},
+                                                  {"toggle" : "Sort by date",
+                                                   "accel" : "D",
+                                                   "key" : "sort_by_date_toggle",
+                                                   "handler" : self.on_sort_by_date},
                                                   {"separator" : True},
                                                   {"toggle" : "Inverted order",
                                                    "key" : "inverted_order_toggle",
@@ -768,8 +770,16 @@ class ViewerApp:
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
         
-        # XXX sort date
-        # XXX sort name
+        button = gtk.ToggleToolButton(gtk.STOCK_ITALIC)
+        button.connect("clicked", self.on_sort_by_name)
+        widget_dict["sort_by_name_button"] = button
+        toolbar.insert(button, -1)
+
+        button = gtk.ToggleToolButton("sort-by-date")
+        button.connect("clicked", self.on_sort_by_date)
+        widget_dict["sort_by_date_button"] = button
+        toolbar.insert(button, -1)
+
         button = gtk.ToolButton("sort-ascending")
         button.connect("clicked", self.on_toggle_sort_order)
         button.set_sensitive(False)
@@ -785,7 +795,7 @@ class ViewerApp:
                  ("rotate-counter-clockwise", "icons/rotate-counter-clockwise.png"),
                  ("flip-horizontal", "icons/flip-horizontal.png"),
                  ("flip-vertical", "icons/flip-vertical.png"),
-                 ("sort-by-date", "icons/sort-by-date-1.png"),
+                 ("sort-by-date", "icons/sort-by-date.png"),
                  ("sort-ascending", "icons/sort-ascending.png"),
                  ("sort-descending", "icons/sort-descending.png")]
 
@@ -1175,16 +1185,36 @@ class ViewerApp:
     def on_delete_current(self, _):
         self.undo_stack.push(self.file_manager.delete_current())
 
-    def on_sort_by_date(self, _):
+    def on_sort_by_date(self, widget):
+        if widget.get_active() == False:
+            return
+
         self.files_order = "Date"
+
         self.widget_dict["inverted_order_toggle"].set_sensitive(True)
         self.widget_dict["inverted_order_button"].set_sensitive(True)
+
+        self.widget_dict["sort_by_date_toggle"].set_active(True)
+        self.widget_dict["sort_by_date_button"].set_active(True)
+        self.widget_dict["sort_by_name_toggle"].set_active(False)
+        self.widget_dict["sort_by_name_button"].set_active(False)
+
         self.reorder_files()
 
-    def on_sort_by_name(self, _):
+    def on_sort_by_name(self, widget):
+        if widget.get_active() == False:
+            return
+
         self.files_order = "Name"
+
         self.widget_dict["inverted_order_toggle"].set_sensitive(True)
         self.widget_dict["inverted_order_button"].set_sensitive(True)
+
+        self.widget_dict["sort_by_name_toggle"].set_active(True)
+        self.widget_dict["sort_by_name_button"].set_active(True)
+        self.widget_dict["sort_by_date_toggle"].set_active(False)
+        self.widget_dict["sort_by_date_button"].set_active(False)
+
         self.reorder_files()
 
     def on_toggle_sort_order(self, widget):
