@@ -19,6 +19,9 @@ from viewerapp import ViewerApp
 # TODO Show images metadata
 # TODO Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)
 
+# TODO Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
+# TODO Undo pane
+
 def check_directories(args):
     for arg in args:
         for dirpath, dirnames, filenames in os.walk(arg):

@@ -361,6 +361,7 @@ class UndoStack:
 
     def clear(self):
         self.stack = []
+        self.on_stack_empty()
 
     def push(self, action):
         self.stack.append(action)
@@ -507,8 +508,6 @@ class ViewerApp:
                                   "accel" : "<Control>%i" % ((i+1)%10),
                                   "handler" : pinbar.on_associate(i)}
 
-        # XXX proper behavior of "Right/Left"
-        # XXX disable reuse menuitem and toolbutton if no prev target
         return [{"text" : "_File",
                  "items" : [{"stock" : gtk.STOCK_OPEN,
                              "accel" : "O",
@@ -555,6 +554,7 @@ class ViewerApp:
                              "accel" : "M",
                              "handler" : self.on_move_to_target},
                             {"text" : "Reuse last target",
+                             "key" : "reuse_mitem",
                              "accel" : (gtk.keysyms.period, 0),
                              "handler" : self.on_reuse_target}]},
                 {"text" : "_View",
@@ -709,8 +709,9 @@ class ViewerApp:
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_REFRESH)
-        button.connect("clicked", self.on_reuse_target)
+        handler_id = button.connect("clicked", self.on_reuse_target)
         button.set_tooltip(tooltips, "Reuse")
+        widget_manager.add_widget("reuse_button", button, handler_id)
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
@@ -996,6 +997,10 @@ class ViewerApp:
         # Handle embedded buttons
         self.widget_manager.get("embedded_mitem").set_sensitive(current_file.can_be_embedded())
         self.widget_manager.get("embedded_button").set_sensitive(current_file.can_be_embedded())
+
+        # Handle reuse checkbox and button
+        self.widget_manager.get("reuse_mitem").set_sensitive(bool(self.last_targets))
+        self.widget_manager.get("reuse_button").set_sensitive(bool(self.last_targets))
 
         # Reset zoom toggle
         self.widget_manager.get("zoom_to_fit_toggle").set_active(True)
