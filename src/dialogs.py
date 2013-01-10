@@ -9,7 +9,7 @@ from pdffile import PDFFile
 from epubfile import EPUBFile
 from videofile import VideoFile
 
-from filescanner import get_files_from_dir
+from filescanner import FiletypeFilter, FileScanner
 
 class DirectorySelectorDialog:
     def __init__(self, title, initial_dir, last_targets, callback):
@@ -43,7 +43,10 @@ class DirectorySelectorDialog:
     def on_selection_changed(self, chooser):
         dirname = chooser.get_preview_filename()
         if dirname:
-            files = get_files_from_dir(dirname)
+            filter_ = FiletypeFilter()
+            filter_.enable_all()
+            scanner = FileScanner(filter_)
+            files = scanner.get_files_from_dir(dirname)
             if files:
                 self.file_manager = FileManager(on_list_empty=lambda: None, 
                                                 on_list_modified=lambda: None)
@@ -104,6 +107,15 @@ class FileSelectorDialog:
         self.chooser.set_preview_widget(widget)
         self.chooser.set_preview_widget_active(True)
         self.chooser.connect("selection-changed", self.on_selection_changed)
+
+        img_filter = gtk.FileFilter()
+        img_filter.set_name("All supported files")
+        img_filter.add_pixbuf_formats()
+        for ext in (PDFFile.valid_extensions +
+                    EPUBFile.valid_extensions +
+                    VideoFile.valid_extensions):
+            img_filter.add_pattern("*." + ext)
+        self.chooser.add_filter(img_filter)
 
         img_filter = gtk.FileFilter()
         img_filter.set_name("Images")

@@ -12,7 +12,7 @@ from dialogs import (OpenDialog, InfoDialog, QuestionDialog, AboutDialog,
                      RenameDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 
-from filescanner import get_files_from_args
+from filescanner import FiletypeFilter, FileScanner
 from utils import get_process_memory_usage
 
 class BlockedWidget:
@@ -590,6 +590,22 @@ class ViewerApp:
                              "accel" : "L",
                              "key" : "fullscreen_toggle",
                              "handler" : self.on_toggle_fullscreen}]},
+                {"text" : "Fi_lter",
+                 "items" : [{"toggle" : "Enable only images",
+                             "key" : "filter_images_toggle",
+                             "handler" : self.on_filetype_toggle},
+                            {"toggle" : "Enable only videos",
+                             "key" : "filter_videos_toggle",
+                             "handler" : self.on_filetype_toggle},
+                            {"toggle" : "Enable only GIF files",
+                             "key" : "filter_gifs_toggle",
+                             "handler" : self.on_filetype_toggle},
+                            {"toggle" : "Enable only PDFs",
+                             "key" : "filter_pdfs_toggle",
+                             "handler" : self.on_filetype_toggle},
+                            {"toggle" : "Enable only EPUBs",
+                             "key" : "filter_epubs_toggle",
+                             "handler" : self.on_filetype_toggle}]},
                 {"text" : "_Image",
                  "items" : [{"text" : "Rotate clockwise",
                              "accel" : "R",
@@ -853,16 +869,21 @@ class ViewerApp:
 
         factory.add_default()
 
-
     def set_files(self, files, start_file):
         self.file_manager.set_files(files)
-
-        self.undo_stack.clear()
 
         if start_file:
             self.file_manager.go_file(start_file)
 
         self.reload_viewer()
+
+    def clear_filters(self):
+        filter_ = FiletypeFilter()
+        for filetype in filter_.get_valid_extensions():
+            toggle_id = "filter_%s_toggle" % filetype
+            with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
+                filetype_toggle.set_active(False)
+                filetype_toggle.set_sensitive(True)
 
     ## Gtk event handlers
     def on_destroy(self, widget):
@@ -925,8 +946,13 @@ class ViewerApp:
 
     def on_file_selected(self, filename):
         self.last_opened_file = filename
-        files, start_file = get_files_from_args([filename])
-        self.set_files(files, start_file)
+        self.clear_filters()
+        filter_ = FiletypeFilter()
+        filter_.enable_all()
+        scanner = FileScanner(filter_)
+        files = scanner.get_files_from_filename(filename)
+        self.undo_stack.clear()
+        self.set_files(files, filename)
 
     def on_new_name_selected(self, new_name):
         if os.path.isfile(new_name):
@@ -1293,6 +1319,32 @@ class ViewerApp:
             inverted_order_button.set_stock_id("sort-ascending")
 
         self.reorder_files()
+
+    def on_filetype_toggle(self, toggle):
+        current_file = self.file_manager.get_current_file()
+        current_filename = current_file.get_filename()
+        filter_ = FiletypeFilter()
+        for filetype in filter_.get_valid_extensions():
+            toggle_id = "filter_%s_toggle" % filetype
+            with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
+                if toggle is filetype_toggle:
+                    if toggle.get_active():
+                        filter_.enable_filetype(filetype, True)
+                    else:
+                        filter_.enable_all()
+                else:
+                    filetype_toggle.set_active(False)
+                    filetype_toggle.set_sensitive(not toggle.get_active())
+        scanner = FileScanner(filter_)
+        files = scanner.get_files_from_filename(current_filename)
+        if files:
+            start_file = None 
+            if filter_.has_allowed_ext(current_filename):
+                start_file = current_filename
+            self.set_files(files, start_file)
+        else:
+            InfoDialog(self.window, "No available files of the selected type").run()
+            self.clear_filters()
 
     def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()

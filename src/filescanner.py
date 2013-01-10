@@ -8,19 +8,37 @@ from giffile import GIFFile
 from pdffile import PDFFile
 from epubfile import EPUBFile
 
-class FileTypeFilter:
-    allowed_extensions = []
+class FiletypeFilter:
+    def __init__(self):
+        self.allowed_filetypes = set()
 
-    @classmethod
-    def get_valid_extensions(cls):
-        return { "videos" : VideoFile.valid_extensions,
-                 "images" : cls.get_image_extensions(),
+    def is_enabled(self, filetype):
+        return filetype in self.allowed_filetypes
+
+    def enable_filetype(self, filetype, enable):
+        if enable:
+            self.allowed_filetypes.add(filetype)
+        elif not enable and self.is_enabled(filetype):
+            self.allowed_filetypes.remove(filetype)
+
+    def enable_all(self):
+        for filetype in self.get_valid_filetypes():
+            self.enable_filetype(filetype, True)
+
+    def disable_all(self):
+        self.allowed_filetypes.clear()
+
+    def get_valid_extensions(self):
+        return { "images" : self.get_image_extensions(),
+                 "videos" : VideoFile.valid_extensions,
                  "gifs" : GIFFile.valid_extensions,
                  "pdfs" : PDFFile.valid_extensions,
                  "epubs" : EPUBFile.valid_extensions }
 
-    @classmethod
-    def get_image_extensions(cls):
+    def get_valid_filetypes(self):
+        return self.get_valid_extensions().keys()
+
+    def get_image_extensions(self):
         ret = []
 
         for format_ in gtk.gdk.pixbuf_get_formats():
@@ -30,64 +48,64 @@ class FileTypeFilter:
 
         return ret
 
-    @classmethod
-    def process_options(cls, options):
-        valid_extensions = cls.get_valid_extensions()
-
+    def set_from_options(self, options):
         for option in dir(options):
             if (option.startswith("allow_") and
                 getattr(options, option)):
-                kind = option.replace("allow_", "")
-                cls.allowed_extensions += valid_extensions[kind]
+                filetype = option.replace("allow_", "")
+                self.enable_filetype(filetype, True)
 
-        if not cls.allowed_extensions:
-            for kind, extensions in valid_extensions.iteritems():
-                cls.allowed_extensions += extensions
+        if not self.allowed_filetypes:
+            self.enable_all()
 
-    @classmethod
-    def has_allowed_ext(cls, filename):
-        for extension in cls.allowed_extensions:
-            if ("." + extension) in filename.lower():
-                return True
+    def has_allowed_ext(self, filename):
+        valid_extensions = self.get_valid_extensions()
+
+        for filetype in self.allowed_filetypes:
+            for extension in valid_extensions[filetype]:
+                if ("." + extension) in filename.lower():
+                    return True
 
         return False
 
-def get_files_from_dir(directory):
-    files = []
+class FileScanner:
+    def __init__(self, filter_, recursive = False):
+        self.filter_ = filter_
+        self.recursive = recursive
 
-    for filename in glob.glob(os.path.join(directory, "*")):
-        if FileTypeFilter.has_allowed_ext(filename):
-            files.append(filename)
+    def get_files_from_dir(self, directory):
+        files = []
 
-    return sorted(files)
+        for filename in glob.glob(os.path.join(directory, "*")):
+            if self.filter_.has_allowed_ext(filename):
+                files.append(filename)
 
-def get_files_from_args(args):
-    files = []
-    start_file = None
+        return sorted(files)
 
-    if len(args) == 1: 
-        if os.path.isdir(args[0]):
-            files = get_files_from_dir(args[0])
+    def get_files_from_filename(self, filename):
+        return self.get_files_from_dir(os.path.dirname(filename))
+
+    def get_files_from_args(self, args):
+        files = []
+        start_file = None
+
+        if self.recursive:
+            for arg in args:
+                for dirpath, dirnames, filenames in os.walk(arg):
+                    files.extend(self.get_files_from_dir(dirpath))
+        elif len(args) == 1: 
+            if os.path.isdir(args[0]):
+                files = self.get_files_from_dir(args[0])
+            else:
+                if self.filter_.has_allowed_ext(args[0]):
+                    start_file = args[0]
+                files = self.get_files_from_filename(args[0])
         else:
-            if FileTypeFilter.has_allowed_ext(args[0]):
-                start_file = args[0]
-            files = get_files_from_dir(os.path.dirname(args[0]))
-    else:
-        for arg in args:
-            if os.path.isdir(arg):
-                files.extend(get_files_from_dir(arg))
-            elif FileTypeFilter.has_allowed_ext(arg):
-                files.append(arg)
+            for arg in args:
+                if os.path.isdir(arg):
+                    files.extend(self.get_files_from_dir(arg))
+                elif self.filter_.has_allowed_ext(arg):
+                    files.append(arg)
 
-    return files, start_file
-
-def get_files_from_args_recursive(args):
-    files = []
-    start_file = None
-
-    for arg in args:
-        for dirpath, dirnames, filenames in os.walk(arg):
-            files.extend(get_files_from_dir(dirpath))
-
-    return files, start_file
+        return files, start_file
 

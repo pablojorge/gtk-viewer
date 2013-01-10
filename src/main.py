@@ -4,23 +4,19 @@ import optparse
 from collections import defaultdict
 
 from filefactory import FileFactory
-from filescanner import (FileTypeFilter, 
-                         get_files_from_args, 
-                         get_files_from_args_recursive)
+from filescanner import FiletypeFilter, FileScanner
 from viewerapp import ViewerApp
 
 # TODO Filter for starred files
-# TODO Filter for filetypes
-
+# TODO Filter without rescanning FS (in-memory filter preserving non-filtered list)
 # TODO Asynchronous loading of images
-# TODO Support for delete / undelete in Mac OS X
-# TODO Thumbnail view (complete, as a bar or both)
 # TODO Support for copying files
 # TODO Show images metadata
 # TODO Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)
-
-# TODO Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
 # TODO Undo pane
+# TODO Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
+# TODO Thumbnail view (complete, as a bar or both)
+# TODO Support for delete / undelete in Mac OS X
 
 def check_directories(args):
     for arg in args:
@@ -60,16 +56,15 @@ def main():
     if not args:
         args = ["."]
 
-    FileTypeFilter.process_options(options)
-
     if options.check:
         check_directories(args)
         return
 
-    if options.recursive:
-        files, start_file = get_files_from_args_recursive(args)
-    else:
-        files, start_file = get_files_from_args(args)
+    filter_ = FiletypeFilter()
+    filter_.set_from_options(options)
+
+    scanner = FileScanner(filter_, options.recursive)
+    files, start_file = scanner.get_files_from_args(args)
 
     if options.stats:
         print_stats(files)

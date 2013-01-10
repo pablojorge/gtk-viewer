@@ -24,6 +24,9 @@ class FileManager:
         self.filelist = map(FileFactory.create, filelist)
 
     def get_current_file(self):
+        if self.index >= self.get_list_length():
+            self.index = self.get_list_length() - 1
+
         return self.filelist[self.index]
 
     def get_prev_file(self):
