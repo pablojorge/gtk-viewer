@@ -1,4 +1,5 @@
 import os
+import copy
 
 from filefactory import FileFactory
 
@@ -15,30 +16,47 @@ class Action:
 class FileList:
     def __init__(self):
         self.files = None
+        self.actual = None
 
     def set_files(self, files):
         self.files = files
+        self.actual = copy.copy(files)
 
     def get_item_at(self, index):
-        return self.files[index % len(self.files)]
+        return self.actual[index % len(self.actual)]
 
     def get_length(self):
-        return len(self.files)
+        return len(self.actual)
 
     def is_empty(self):
-        return not self.files
+        return not self.actual
 
     def insert(self, pos, item):
-        self.files.insert(pos, item)
+        self.files.insert(pos, item) # XXX may be misplaced
+        self.actual.insert(pos, item)
 
     def remove(self, pos):
-        del self.files[pos]
+        del self.files[self.files.index(self.actual[pos].get_filename())]
+        del self.actual[pos]
 
     def find(self, filename):
-        return self.files.index(filename)
+        return self.actual.index(filename)
 
     def sort(self, key, reverse):
-        self.files = sorted(self.files, key, reverse)
+        self.files = sorted(self.files, key=key, reverse=reverse)
+        self.actual = sorted(self.actual, key=key, reverse=reverse)
+
+    def apply_filter(self, filter_):
+        filtered = filter(filter_.allowed, self.files)
+
+        if not len(filtered):
+            return False
+
+        self.actual = filtered
+        return True
+
+    def disable_filter(self):
+        self.actual = copy.copy(self.files)
 
 class FileManager:
     def __init__(self, on_list_empty, on_list_modified):
@@ -117,8 +135,7 @@ class FileManager:
 
             def undo_action():
                 current.rename(orig_filename)
-                self.index = self.filelist.find(orig_filename)
-                self.on_list_modified()
+                self.filelist.go_file(orig_filename)
         else:
             self.on_current_eliminated()
             
@@ -126,8 +143,7 @@ class FileManager:
                 restored = FileFactory.create(new_filename)
                 restored.rename(orig_filename)
                 self.filelist.insert(orig_index, restored)
-                self.index = self.filelist.find(orig_filename)
-                self.on_list_modified()
+                self.filelist.go_file(orig_filename)
 
         return Action(Action.NORMAL,
                       "'%s' renamed to '%s'" % (orig_filename, new_filename),
@@ -153,8 +169,7 @@ class FileManager:
             restored = FileFactory.create(new_filename)
             restored.rename(orig_filename)
             self.filelist.insert(orig_index, restored)
-            self.index = self.filelist.find(orig_filename)
-            self.on_list_modified()
+            self.go_file(orig_filename)
 
         return Action(Action.NORMAL,
                       "'%s' moved to '%s'" % (orig_filename, target_dir),
@@ -172,8 +187,7 @@ class FileManager:
             restored = FileFactory.create(orig_filename)
             restored.untrash()
             self.filelist.insert(orig_index, restored)
-            self.index = self.filelist.find(orig_filename)
-            self.on_list_modified()
+            self.go_file(orig_filename)
 
         return Action(Action.DANGER,
                       "'%s' deleted" % (orig_filename),
@@ -188,12 +202,32 @@ class FileManager:
 
         def undo_action():
             current.set_starred(prev_status)
-            self.index = self.filelist.find(orig_filename)
-            self.on_list_modified()
+            self.go_file(orig_filename)
 
         return Action(Action.NORMAL,
                       "'%s' %s" % (current.get_basename(), "unstarred" if prev_status else "starred"),
                       undo_action)
+
+    def apply_filter(self, filter_):
+        current = self.get_current_file()
+        filename = current.get_filename()
+
+        if not self.filelist.apply_filter(filter_):
+            return False
+
+        if filter_.has_allowed_ext(filename):
+            self.index = self.filelist.find(filename)
+        else:
+            self.index = min(self.index, self.filelist.get_length() - 1)
+
+        self.on_list_modified()
+        return True
+
+    def disable_filter(self):
+        current = self.get_current_file()
+        filename = current.get_filename()
+        self.filelist.disable_filter()
+        self.go_file(filename)
 
     # Internal helpers:
     def get_safe_candidate(self, target):

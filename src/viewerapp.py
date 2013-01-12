@@ -883,7 +883,6 @@ class ViewerApp:
             toggle_id = "filter_%s_toggle" % filetype
             with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
                 filetype_toggle.set_active(False)
-                filetype_toggle.set_sensitive(True)
 
     ## Gtk event handlers
     def on_destroy(self, widget):
@@ -1321,9 +1320,8 @@ class ViewerApp:
         self.reorder_files()
 
     def on_filetype_toggle(self, toggle):
-        current_file = self.file_manager.get_current_file()
-        current_filename = current_file.get_filename()
         filter_ = FiletypeFilter()
+
         for filetype in filter_.get_valid_extensions():
             toggle_id = "filter_%s_toggle" % filetype
             with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
@@ -1331,20 +1329,17 @@ class ViewerApp:
                     if toggle.get_active():
                         filter_.enable_filetype(filetype, True)
                     else:
-                        filter_.enable_all()
+                        filter_ = None
                 else:
                     filetype_toggle.set_active(False)
-                    filetype_toggle.set_sensitive(not toggle.get_active())
-        scanner = FileScanner(filter_)
-        files = scanner.get_files_from_filename(current_filename)
-        if files:
-            start_file = None 
-            if filter_.has_allowed_ext(current_filename):
-                start_file = current_filename
-            self.set_files(files, start_file)
+
+        if filter_:
+            if not self.file_manager.apply_filter(filter_):
+                InfoDialog(self.window, "No available files of the selected type").run()
+                self.clear_filters()
+                self.file_manager.disable_filter()
         else:
-            InfoDialog(self.window, "No available files of the selected type").run()
-            self.clear_filters()
+            self.file_manager.disable_filter()
 
     def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()

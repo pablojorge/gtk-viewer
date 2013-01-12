@@ -68,6 +68,9 @@ class FiletypeFilter:
 
         return False
 
+    def allowed(self, file_):
+        return self.has_allowed_ext(file_.get_filename())
+
 class FileScanner:
     def __init__(self, filter_, recursive = False):
         self.filter_ = filter_
