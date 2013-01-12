@@ -7,8 +7,13 @@ from filefactory import FileFactory
 from filescanner import FiletypeFilter, FileScanner
 from viewerapp import ViewerApp
 
+# XXX Starting zoom level when zooming in/out
+# XXX Icons can't be found if program is ran outside source dir
 # TODO Filter for starred files
+# TODO Filename in fullscreen mode (label below image)
 # TODO Filter without rescanning FS (in-memory filter preserving non-filtered list)
+#        -> original list - filtered (current) list
+
 # TODO Asynchronous loading of images
 # TODO Support for copying files
 # TODO Show images metadata

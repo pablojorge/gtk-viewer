@@ -12,74 +12,97 @@ class Action:
         self.description = description
         self.undo = undo
 
+class FileList:
+    def __init__(self):
+        self.files = None
+
+    def set_files(self, files):
+        self.files = files
+
+    def get_item_at(self, index):
+        return self.files[index % len(self.files)]
+
+    def get_length(self):
+        return len(self.files)
+
+    def is_empty(self):
+        return not self.files
+
+    def insert(self, pos, item):
+        self.files.insert(pos, item)
+
+    def remove(self, pos):
+        del self.files[pos]
+
+    def find(self, filename):
+        return self.files.index(filename)
+
+    def sort(self, key, reverse):
+        self.files = sorted(self.files, key, reverse)
+
 class FileManager:
     def __init__(self, on_list_empty, on_list_modified):
-        self.filelist = []
+        self.filelist = FileList()
         self.index = 0
 
         self.on_list_empty = on_list_empty
         self.on_list_modified = on_list_modified
 
-    def set_files(self, filelist):
-        self.filelist = map(FileFactory.create, filelist)
+    def set_files(self, files):
+        self.filelist.set_files(map(FileFactory.create, files))
 
     def get_current_file(self):
-        if self.index >= self.get_list_length():
-            self.index = self.get_list_length() - 1
-
-        return self.filelist[self.index]
+        return self.filelist.get_item_at(self.index)
 
     def get_prev_file(self):
-        return self.filelist[self.index - 1]
+        return self.filelist.get_item_at(self.index - 1)
 
     def get_next_file(self):
-        return self.filelist[(self.index + 1) % len(self.filelist)]
+        return self.filelist.get_item_at(self.index + 1)
 
     def get_current_index(self):
         return self.index
 
     def get_list_length(self):
-        return len(self.filelist)
+        return self.filelist.get_length()
 
     def empty(self):
-        return not self.filelist
+        return self.filelist.is_empty()
 
     def go_first(self):
         self.index = 0
         self.on_list_modified()
 
     def go_last(self):
-        self.index = len(self.filelist) - 1
+        self.index = self.filelist.get_length() - 1
         self.on_list_modified()
 
     def go_forward(self, steps):
         self.index += steps
-        if self.index >= len(self.filelist):
-            self.index = self.index - len(self.filelist)
+        if self.index >= self.filelist.get_length():
+            self.index = self.index - self.filelist.get_length()
         self.on_list_modified()
 
     def go_backward(self, steps):
         self.index -= steps
         if self.index < 0:
-            self.index = len(self.filelist) + self.index
+            self.index = self.filelist.get_length() + self.index
         self.on_list_modified()
 
     def go_file(self, filename):
-        self.index = self.filelist.index(filename)
+        self.index = self.filelist.find(filename)
         self.on_list_modified()
 
     def sort_by_date(self, reverse):
         filename = self.get_current_file().get_filename()
-        self.filelist = sorted(self.filelist, 
-                               key=lambda file_: file_.get_mtime(),
-                               reverse=reverse)
+        self.filelist.sort(key=lambda file_: file_.get_mtime(),
+                           reverse=reverse)
         self.go_file(filename)
 
     def sort_by_name(self, reverse):
         filename = self.get_current_file().get_filename()
-        self.filelist = sorted(self.filelist, 
-                               key=lambda file_: file_.get_filename(),
-                               reverse=reverse)
+        self.filelist.sort(key=lambda file_: file_.get_filename(),
+                           reverse=reverse)
         self.go_file(filename)
 
     def rename_current(self, new_filename):
@@ -94,7 +117,7 @@ class FileManager:
 
             def undo_action():
                 current.rename(orig_filename)
-                self.index = orig_index # XXX podria no existir mas
+                self.index = self.filelist.find(orig_filename)
                 self.on_list_modified()
         else:
             self.on_current_eliminated()
@@ -103,7 +126,7 @@ class FileManager:
                 restored = FileFactory.create(new_filename)
                 restored.rename(orig_filename)
                 self.filelist.insert(orig_index, restored)
-                self.index = orig_index # XXX podria ser out of bounds
+                self.index = self.filelist.find(orig_filename)
                 self.on_list_modified()
 
         return Action(Action.NORMAL,
@@ -130,7 +153,7 @@ class FileManager:
             restored = FileFactory.create(new_filename)
             restored.rename(orig_filename)
             self.filelist.insert(orig_index, restored)
-            self.index = orig_index # XXX podria ser out of bounds
+            self.index = self.filelist.find(orig_filename)
             self.on_list_modified()
 
         return Action(Action.NORMAL,
@@ -149,7 +172,7 @@ class FileManager:
             restored = FileFactory.create(orig_filename)
             restored.untrash()
             self.filelist.insert(orig_index, restored)
-            self.index = orig_index # XXX podria ser out of bounds
+            self.index = self.filelist.find(orig_filename)
             self.on_list_modified()
 
         return Action(Action.DANGER,
@@ -158,14 +181,14 @@ class FileManager:
 
     def toggle_star(self):
         current = self.get_current_file()
-        orig_index = self.get_current_index()
+        orig_filename = current.get_filename()
         prev_status = current.is_starred()
         current.set_starred(not prev_status)
         self.on_list_modified()
 
         def undo_action():
             current.set_starred(prev_status)
-            self.index = orig_index # XXX podria no existir mas
+            self.index = self.filelist.find(orig_filename)
             self.on_list_modified()
 
         return Action(Action.NORMAL,
@@ -203,12 +226,12 @@ class FileManager:
             return action
 
     def on_current_eliminated(self):
-        del self.filelist[self.index]
+        self.filelist.remove(self.index)
 
-        if not self.filelist:
+        if self.filelist.is_empty():
             self.on_list_empty()
         else:
-            if self.index >= len(self.filelist):
-                self.index = self.index - len(self.filelist)
+            if self.index >= self.filelist.get_length():
+                self.index = self.index - self.filelist.get_length()
             self.on_list_modified()
 
