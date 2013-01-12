@@ -474,6 +474,14 @@ class ViewerApp:
                                      on_scroll_event=self.on_th_scroll)
         hbox.pack_start(ebox, False, False, 0)
 
+        # Name label
+        self.file_name = gtk.Label()
+        ebox = factory.get_event_box(child=self.file_name,
+                                     bg_color=self.BG_COLOR,
+                                     on_button_press_event=lambda: None,
+                                     on_scroll_event=lambda: None)
+        vbox.pack_start(ebox, False, False, 0)
+
         # Status Bar:
         self.status_bar = gtk.HBox(False, 0)
         vbox.pack_start(self.status_bar, False, False, 5)
@@ -1044,11 +1052,17 @@ class ViewerApp:
 
     def refresh_info(self):
         self.refresh_title()
+        self.refresh_filename()
         self.refresh_status()
 
     def refresh_title(self):
         image_file = self.file_manager.get_current_file()
         self.window.set_title(image_file.get_filename())
+
+    def refresh_filename(self):
+        image_file = self.file_manager.get_current_file()
+        markup = "<b><span foreground='white'>%s</span></b>" % image_file.get_filename()
+        self.file_name.set_markup(markup)
 
     def refresh_status(self):
         image_file = self.file_manager.get_current_file()
@@ -1160,6 +1174,7 @@ class ViewerApp:
             self.go_forward_icon.hide()
             self.th_left.hide()
             self.th_right.hide()
+            self.file_name.hide()
             self.status_bar.hide()
             self.fullview_active = True
         else:
@@ -1175,6 +1190,7 @@ class ViewerApp:
             if thumbnails_on:
                 self.th_left.show()
                 self.th_right.show()
+            self.file_name.show()
             if status_bar_on:
                 self.status_bar.show()
             self.fullview_active = False
