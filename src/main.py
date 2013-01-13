@@ -4,13 +4,13 @@ import optparse
 from collections import defaultdict
 
 from filefactory import FileFactory
-from filescanner import FiletypeFilter, FileScanner
+from filescanner import FileScanner
 from viewerapp import ViewerApp
 
 # XXX Starting zoom level when zooming in/out
 # XXX Icons can't be found if program is ran outside source dir
-# TODO Filter for starred files
 
+# TODO Ability to have no open files (0/0)
 # TODO Asynchronous loading of images
 # TODO Support for copying files
 # TODO Show images metadata
@@ -47,12 +47,6 @@ def main():
     parser.add_option("-s", "--stats", action="store_true", default=False)
     parser.add_option("", "--base-dir")
 
-    parser.add_option("", "--allow-images", action="store_true", default=False)
-    parser.add_option("", "--allow-gifs", action="store_true", default=False)
-    parser.add_option("", "--allow-pdfs", action="store_true", default=False)
-    parser.add_option("", "--allow-epubs", action="store_true", default=False)
-    parser.add_option("", "--allow-videos", action="store_true", default=False)
-
     options, args = parser.parse_args()
 
     if not args:
@@ -62,10 +56,7 @@ def main():
         check_directories(args)
         return
 
-    filter_ = FiletypeFilter()
-    filter_.set_from_options(options)
-
-    scanner = FileScanner(filter_, options.recursive)
+    scanner = FileScanner(recursive=options.recursive)
     files, start_file = scanner.get_files_from_args(args)
 
     if options.stats:

@@ -12,7 +12,7 @@ from dialogs import (OpenDialog, InfoDialog, QuestionDialog, AboutDialog,
                      RenameDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 
-from filescanner import FiletypeFilter, FileScanner
+from filescanner import FileFilter, FileScanner
 from utils import get_process_memory_usage
 
 class BlockedWidget:
@@ -396,6 +396,7 @@ class ViewerApp:
         self.last_targets = []
         self.undo_stack = UndoStack(self.on_undo_stack_push, 
                                     self.on_undo_stack_empty)
+        self.filter_ = FileFilter()
 
         self.embedded_app = None
         self.fullview_active = False
@@ -613,21 +614,36 @@ class ViewerApp:
                              "accel" : "<Control>F",
                              "handler" : self.on_flip_vertical}]},
                 {"text" : "Fi_lter",
-                 "items" : [{"toggle" : "Enable only images",
+                 "items" : [{"toggle" : "Show images",
                              "key" : "filter_images_toggle",
+                             "active" : True,
                              "handler" : self.on_filetype_toggle},
-                            {"toggle" : "Enable only videos",
+                            {"toggle" : "Show videos",
                              "key" : "filter_videos_toggle",
+                             "active" : True,
                              "handler" : self.on_filetype_toggle},
-                            {"toggle" : "Enable only GIF files",
+                            {"toggle" : "Show GIF files",
                              "key" : "filter_gifs_toggle",
+                             "active" : True,
                              "handler" : self.on_filetype_toggle},
-                            {"toggle" : "Enable only PDFs",
+                            {"toggle" : "Show PDFs",
                              "key" : "filter_pdfs_toggle",
+                             "active" : True,
                              "handler" : self.on_filetype_toggle},
-                            {"toggle" : "Enable only EPUBs",
+                            {"toggle" : "Show EPUBs",
                              "key" : "filter_epubs_toggle",
-                             "handler" : self.on_filetype_toggle}]},
+                             "active" : True,
+                             "handler" : self.on_filetype_toggle},
+                            {"separator" : True},
+                            {"toggle" : "Show starreds",
+                             "key" : "filter_starred_toggle",
+                             "active" : True,
+                             "handler" : self.on_status_toggle},
+                            {"toggle" : "Show unstarreds",
+                             "key" : "filter_unstarred_toggle",
+                             "active" : True,
+                             "handler" : self.on_status_toggle},
+                            ]},
                 {"text" : "_Go",
                  "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
                              "accel" : "H",
@@ -886,11 +902,17 @@ class ViewerApp:
         self.reload_viewer()
 
     def clear_filters(self):
-        filter_ = FiletypeFilter()
-        for filetype in filter_.get_valid_extensions():
+        for filetype in self.filter_.get_valid_filetypes():
             toggle_id = "filter_%s_toggle" % filetype
             with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
-                filetype_toggle.set_active(False)
+                filetype_toggle.set_active(True)
+            self.filter_.enable_filetype(filetype, True)
+
+        for status in self.filter_.get_valid_status():
+            toggle_id = "filter_%s_toggle" % status
+            with self.widget_manager.get_blocked(toggle_id) as status_toggle:
+                status_toggle.set_active(True)
+            self.filter_.enable_status(status, True)
 
     ## Gtk event handlers
     def on_destroy(self, widget):
@@ -954,9 +976,7 @@ class ViewerApp:
     def on_file_selected(self, filename):
         self.last_opened_file = filename
         self.clear_filters()
-        filter_ = FiletypeFilter()
-        filter_.enable_all()
-        scanner = FileScanner(filter_)
+        scanner = FileScanner()
         files = scanner.get_files_from_filename(filename)
         self.undo_stack.clear()
         self.set_files(files, filename)
@@ -1336,26 +1356,46 @@ class ViewerApp:
         self.reorder_files()
 
     def on_filetype_toggle(self, toggle):
-        filter_ = FiletypeFilter()
+        # create a copy of the filter:
+        filter_ = FileFilter.copy(self.filter_)
 
-        for filetype in filter_.get_valid_extensions():
+        for filetype in self.filter_.get_valid_filetypes():
             toggle_id = "filter_%s_toggle" % filetype
-            with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
-                if toggle is filetype_toggle:
-                    if toggle.get_active():
-                        filter_.enable_filetype(filetype, True)
-                    else:
-                        filter_ = None
-                else:
-                    filetype_toggle.set_active(False)
+            if toggle is self.widget_manager.get(toggle_id):
+                break
 
-        if filter_:
+        with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
+            # update the filter to match the toggle state:
+            filter_.enable_filetype(filetype, filetype_toggle.get_active())
+
             if not self.file_manager.apply_filter(filter_):
-                InfoDialog(self.window, "No available files of the selected type").run()
-                self.clear_filters()
-                self.file_manager.disable_filter()
-        else:
-            self.file_manager.disable_filter()
+                InfoDialog(self.window, "Unable to update filter").run()
+                # revert toggle:
+                filetype_toggle.set_active(not filetype_toggle.get_active())
+            else:
+                # switch to the new filter:
+                self.filter_ = filter_
+
+    def on_status_toggle(self, toggle):
+        # create a copy of the filter:
+        filter_ = FileFilter.copy(self.filter_)
+
+        for status in self.filter_.get_valid_status():
+            toggle_id = "filter_%s_toggle" % status
+            if toggle is self.widget_manager.get(toggle_id):
+                break
+
+        with self.widget_manager.get_blocked(toggle_id) as status_toggle:
+            # update the filter to match the toggle state:
+            filter_.enable_status(status, status_toggle.get_active())
+
+            if not self.file_manager.apply_filter(filter_):
+                InfoDialog(self.window, "Unable to update filter").run()
+                # revert toggle:
+                status_toggle.set_active(not status_toggle.get_active())
+            else:
+                # switch to the new filter:
+                self.filter_ = filter_
 
     def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()

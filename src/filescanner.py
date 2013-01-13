@@ -1,5 +1,6 @@
 import os
 import glob
+import copy
 
 import gtk
 
@@ -8,37 +9,57 @@ from giffile import GIFFile
 from pdffile import PDFFile
 from epubfile import EPUBFile
 
-class FiletypeFilter:
-    def __init__(self):
-        self.allowed_filetypes = set()
+class FileFilter:
+    STARRED   = "starred"
+    UNSTARRED = "unstarred"
 
-    def is_enabled(self, filetype):
+    def __init__(self):
+        self.allowed_filetypes = set(FileFilter.get_valid_filetypes())
+        self.allowed_status = set(FileFilter.get_valid_status())
+
+    @staticmethod
+    def copy(other):
+        filter_ = FileFilter()
+        filter_.allowed_filetypes = copy.copy(other.allowed_filetypes)
+        filter_.allowed_status = copy.copy(other.allowed_status)
+        return filter_
+
+    def is_filetype_enabled(self, filetype):
         return filetype in self.allowed_filetypes
+
+    def is_status_enabled(self, status):
+        return status in self.allowed_status
 
     def enable_filetype(self, filetype, enable):
         if enable:
             self.allowed_filetypes.add(filetype)
-        elif not enable and self.is_enabled(filetype):
+        elif not enable and self.is_filetype_enabled(filetype):
             self.allowed_filetypes.remove(filetype)
 
-    def enable_all(self):
-        for filetype in self.get_valid_filetypes():
-            self.enable_filetype(filetype, True)
+    def enable_status(self, status, enable):
+        if enable:
+            self.allowed_status.add(status)
+        elif not enable and self.is_status_enabled(status):
+            self.allowed_status.remove(status)
 
-    def disable_all(self):
-        self.allowed_filetypes.clear()
-
-    def get_valid_extensions(self):
-        return { "images" : self.get_image_extensions(),
+    @classmethod
+    def get_valid_extensions(cls):
+        return { "images" : cls.get_image_extensions(),
                  "videos" : VideoFile.valid_extensions,
                  "gifs" : GIFFile.valid_extensions,
                  "pdfs" : PDFFile.valid_extensions,
                  "epubs" : EPUBFile.valid_extensions }
 
-    def get_valid_filetypes(self):
-        return self.get_valid_extensions().keys()
+    @classmethod
+    def get_valid_filetypes(cls):
+        return cls.get_valid_extensions().keys()
 
-    def get_image_extensions(self):
+    @classmethod
+    def get_valid_status(cls):
+        return [cls.STARRED, cls.UNSTARRED]
+
+    @classmethod
+    def get_image_extensions(cls):
         ret = []
 
         for format_ in gtk.gdk.pixbuf_get_formats():
@@ -47,16 +68,6 @@ class FiletypeFilter:
                     ret.append(extension)
 
         return ret
-
-    def set_from_options(self, options):
-        for option in dir(options):
-            if (option.startswith("allow_") and
-                getattr(options, option)):
-                filetype = option.replace("allow_", "")
-                self.enable_filetype(filetype, True)
-
-        if not self.allowed_filetypes:
-            self.enable_all()
 
     def has_allowed_ext(self, filename):
         valid_extensions = self.get_valid_extensions()
@@ -68,12 +79,27 @@ class FiletypeFilter:
 
         return False
 
+    def has_allowed_status(self, file_):
+        if (self.STARRED in self.allowed_status and 
+            file_.is_starred()):
+            return True
+
+        if (self.UNSTARRED in self.allowed_status and 
+            not file_.is_starred()):
+            return True
+
+        return False
+
     def allowed(self, file_):
-        return self.has_allowed_ext(file_.get_filename())
+        return (self.has_allowed_ext(file_.get_filename()) and 
+                self.has_allowed_status(file_))
 
 class FileScanner:
-    def __init__(self, filter_, recursive = False):
-        self.filter_ = filter_
+    def __init__(self, filter_ = None, recursive = False):
+        if filter_:
+            self.filter_ = filter_
+        else:
+            self.filter_ = FileFilter()
         self.recursive = recursive
 
     def get_files_from_dir(self, directory):

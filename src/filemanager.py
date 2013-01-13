@@ -215,7 +215,7 @@ class FileManager:
         if not self.filelist.apply_filter(filter_):
             return False
 
-        if filter_.has_allowed_ext(filename):
+        if filter_.allowed(current):
             self.index = self.filelist.find(filename)
         else:
             self.index = min(self.index, self.filelist.get_length() - 1)

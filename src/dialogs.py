@@ -9,7 +9,7 @@ from pdffile import PDFFile
 from epubfile import EPUBFile
 from videofile import VideoFile
 
-from filescanner import FiletypeFilter, FileScanner
+from filescanner import FileScanner
 
 class DirectorySelectorDialog:
     def __init__(self, title, initial_dir, last_targets, callback):
@@ -43,9 +43,7 @@ class DirectorySelectorDialog:
     def on_selection_changed(self, chooser):
         dirname = chooser.get_preview_filename()
         if dirname:
-            filter_ = FiletypeFilter()
-            filter_.enable_all()
-            scanner = FileScanner(filter_)
+            scanner = FileScanner()
             files = scanner.get_files_from_dir(dirname)
             if files:
                 self.file_manager = FileManager(on_list_empty=lambda: None, 
