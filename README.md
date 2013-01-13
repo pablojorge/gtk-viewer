@@ -1,6 +1,6 @@
 # GTK Viewer
 
-Simple multimedia viewer written in Python. I created it to organize large collections of files, so my main goal was to make it comfortable to use (it has many single-key shortcuts) and to be versatile, so it can preview many different types of images, animated GIFs, PDF files, video files, and so on.
+Simple multimedia viewer written in Python. I created it to organize large collections of files, so my main goal was to make it comfortable to use (it has many single-key shortcuts) and to be versatile, so it can preview many different types of images, animated GIFs, PDF files, EPub files, video files, and so on.
 
 ## Viewing files
 
@@ -14,19 +14,21 @@ The main screen shows the current file and a thumbnail of the previous and the n
 * Image index and total number of files
 * Current order (by date/name ascending or descending)
 
+On the top of the window there's a menubar, a toolbar with the most common operations, and the pinbar. The pinbar provides quick-access to a small subset of target directories. Each contains a custom thumbnail from each target directory, and can be used to quickly move the current file to that directory. The name of the current file is in both the window title and below the image.
+
 ### Special files
 
 Video files are previewed selecting a frame located at approximately 20% of the duration of the video. GIF files are first previewed showing only the first frame. PDF files are previewed extracting the image of the first page, and EPUB files are previewed by extracting the cover image.
 
 ### Embedded preview
 
-By pressing the 'E' key, if the current file is an animated GIF file, animation will start. That setting is persistent, so if you switch to another GIF file it will also be animated, until animation is toggled off again with the 'E' key. 
+By pressing the 'G' key, if the current file is an animated GIF file, animation will start. That setting is persistent, so if you switch to another GIF file it will also be animated, until animation is toggled off again. 
 
-For video files, pressing the 'e' key will embed a video player in the main window, but it's not permanent, so if you switch to a new video, the embedded player will be killed and will have to be started again with the 'e' key.
+For video files, pressing the 'E' key will embed a video player in the main window, but it's not permanent, so if you switch to a new video, the embedded player will be killed and will have to be started again with the 'E' key.
 
 ## Moving files
 
-The idea is to make it easy to distribute a big set of files into different directories. The first step is to select a base directory. Once the base directory is selected (B), every time a new target directory is selected, it will be relative to the base dir. When the 'M' key is pressed, a directory selection dialog will be presented, starting in the base directory. Once a directory is selected, the current file will be moved to that dir. 
+The idea is to make it easy to distribute a big set of files into different directories. The first step is to select a base directory. Once the base directory is selected (B), every time a new target directory is selected, it will be relative to the base dir. When the 'M' key is pressed, a directory selection dialog will be presented, starting in the base directory. Once a directory is selected, the current file will be moved to that dir. The last selection can be reused with the '.' key. Every time the target selection dialog is shown, on the left there's a list with all the targets already used in this session, ordered by name.
 
 ### Auto-handling of conflicts
 
@@ -67,8 +69,8 @@ It supports previewing the following kind of files:
  * __File rename__ (Control-M)
  * __Starring/unstarring__ (S)
  * __Undo__ (U)
- * __Repeat last action__ ('.', Enter)
- * __Open__ (Control-O)
+ * __Repeat last action__ ('.')
+ * __Open__ (O)
  * __Toggle pinbar__ (P)
  * __Send to bucket 'n'__ (1-0)
  * __Associate target of bucket 'n'__ (Control 1-0)
@@ -76,10 +78,12 @@ It supports previewing the following kind of files:
 * __Navigation__
  * __Open with external viewer__ (X)
  * __Enable/disable embedded preview__ (E)
+ * __Enable/disable GIF animation__ (E)
  * __Sort by date__ (D)
  * __Sort by name__ (N)
  * __Invert sort order__ (I)
  * __Fullscreen__ (L)
+ * __Image fullview__ (V)
  * __Toggle thumbnails__ (T)
  * __Go forward/back__ (Right, Left)
  * __Goto first/last__ (H, End)
@@ -96,18 +100,14 @@ Run viewer.py with '-h' or '--help' to obtain the help:
 
     $ python2.7 viewer.py --help
 
-    Usage: viewer.py [options] FILE...
+    Usage: main.py [options] FILE...
 
     Options:
-      -h, --help           show this help message and exit
-      -r, --recursive      
-      -c, --check          
-      -s, --stats          
-      --base-dir=BASE_DIR  
-      --allow-images       
-      --allow-gifs         
-      --allow-pdfs         
-      --allow-videos       
+      -h, --help            show this help message and exit
+      -r, --recursive       
+      -c, --check           
+      -s, --stats           
+      -b BASE_DIR, --base-dir=BASE_DIR
       
 ### Recursivity:
 
@@ -121,6 +121,6 @@ The specified dirs will be scanned to see whether there are unorganized files (d
 
 In this mode, the program will just print the total number of files by type.
 
-### File filtering
+### Base dir
 
-Each '--allow-<kind>' will enable the inclusion of that kind of files in the full list.
+This parameter pre-sets the base dir. Can be modified later with the 'B' key.

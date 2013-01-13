@@ -46,8 +46,7 @@ class DirectorySelectorDialog:
             scanner = FileScanner()
             files = scanner.get_files_from_dir(dirname)
             if files:
-                self.file_manager = FileManager(on_list_empty=lambda: None, 
-                                                on_list_modified=lambda: None)
+                self.file_manager = FileManager(on_list_modified=lambda: None)
                 self.file_manager.set_files(files)
                 self.th_viewer.load(self.file_manager.get_current_file())
                 self.th_viewer.show()

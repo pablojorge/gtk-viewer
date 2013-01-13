@@ -7,7 +7,6 @@ from filefactory import FileFactory
 from filescanner import FileScanner
 from viewerapp import ViewerApp
 
-# TODO Ability to have no open files (0/0)
 # TODO Asynchronous loading of images
 # TODO Support for copying files
 # TODO Show images metadata
@@ -42,7 +41,7 @@ def main():
     parser.add_option("-r", "--recursive", action="store_true", default=False)
     parser.add_option("-c", "--check", action="store_true", default=False)
     parser.add_option("-s", "--stats", action="store_true", default=False)
-    parser.add_option("", "--base-dir")
+    parser.add_option("-b", "--base-dir")
 
     options, args = parser.parse_args()
 
