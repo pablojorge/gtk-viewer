@@ -7,9 +7,6 @@ from filefactory import FileFactory
 from filescanner import FileScanner
 from viewerapp import ViewerApp
 
-# XXX Starting zoom level when zooming in/out
-# XXX Icons can't be found if program is ran outside source dir
-
 # TODO Ability to have no open files (0/0)
 # TODO Asynchronous loading of images
 # TODO Support for copying files

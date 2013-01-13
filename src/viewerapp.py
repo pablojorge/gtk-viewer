@@ -42,6 +42,13 @@ class WidgetManager:
         return BlockedWidget(self.widget_dict[key],
                              self.widget_dict[key + "_handler"])
 
+    def apply_blocked(self, key, action):
+        with self.get_blocked(key) as blocked:
+            action(blocked)
+
+    def set_active(self, key, value):
+        self.apply_blocked(key, lambda widget: widget.set_active(value))
+
 class AutoScrolledWindow:
     def __init__(self, child, bg_color, on_special_drag_left, 
                                         on_special_drag_right, 
@@ -380,7 +387,7 @@ class UndoStack:
         return action
 
 class ViewerApp:
-    DEF_WIDTH = 1024
+    DEF_WIDTH = 1280
     DEF_HEIGHT = 768
     TH_SIZE = 200
     BG_COLOR = "#000000"
@@ -477,6 +484,7 @@ class ViewerApp:
 
         # Name label
         self.file_name = gtk.Label()
+        self.file_name.set_selectable(True)
         ebox = factory.get_event_box(child=self.file_name,
                                      bg_color=self.BG_COLOR,
                                      on_button_press_event=lambda: None,
@@ -886,8 +894,10 @@ class ViewerApp:
                  ("sort-ascending", "icons/sort-ascending.png"),
                  ("sort-descending", "icons/sort-descending.png")]
 
+        root_path = os.path.split(os.path.dirname(__file__))[0]
+
         for icon_id, filename in icons:
-            pixbuf = gtk.gdk.pixbuf_new_from_file(filename)
+            pixbuf = gtk.gdk.pixbuf_new_from_file(os.path.join(root_path, filename))
             iconset = gtk.IconSet(pixbuf)
             factory.add(icon_id, iconset)
 
@@ -955,8 +965,8 @@ class ViewerApp:
 
         old_size = self.image_viewer.get_scaled_size()
 
-        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
-        self.widget_manager.get("zoom_to_fit_button").set_active(False)
+        self.widget_manager.set_active("zoom_to_fit_toggle", False)
+        self.widget_manager.set_active("zoom_to_fit_button", False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * factor)
         self.refresh_info()
 
@@ -1056,8 +1066,8 @@ class ViewerApp:
         self.widget_manager.get("reuse_button").set_sensitive(bool(self.last_targets))
 
         # Reset zoom toggle
-        self.widget_manager.get("zoom_to_fit_toggle").set_active(True)
-        self.widget_manager.get("zoom_to_fit_button").set_active(True)
+        self.widget_manager.set_active("zoom_to_fit_toggle", True)
+        self.widget_manager.set_active("zoom_to_fit_button", True)
 
         self.fit_viewer(force=True)
         self.refresh_info()
@@ -1174,8 +1184,8 @@ class ViewerApp:
         else:
             self.window.unfullscreen()
 
-        self.widget_manager.get("fullscreen_toggle").set_active(toggle.get_active())
-        self.widget_manager.get("fullscreen_button").set_active(toggle.get_active())
+        self.widget_manager.set_active("fullscreen_toggle", toggle.get_active())
+        self.widget_manager.set_active("fullscreen_button", toggle.get_active())
 
     def on_toggle_fullview(self, _):
         fullscreen_on = self.widget_manager.get("fullscreen_toggle").active
@@ -1410,8 +1420,8 @@ class ViewerApp:
             self.reload_viewer(force_stop=False)
 
     def on_enable_animation(self, toggle):
-        self.widget_manager.get("animation_toggle").set_active(toggle.get_active())
-        self.widget_manager.get("animation_button").set_active(toggle.get_active())
+        self.widget_manager.set_active("animation_toggle", toggle.get_active())
+        self.widget_manager.set_active("animation_button", toggle.get_active())
         self.reload_viewer(force_stop=False)
 
     def on_toggle_zoom(self, toggle):
@@ -1420,20 +1430,20 @@ class ViewerApp:
         else:
             self.image_viewer.zoom_at(100)
 
-        self.widget_manager.get("zoom_to_fit_toggle").set_active(toggle.get_active())
-        self.widget_manager.get("zoom_to_fit_button").set_active(toggle.get_active())
+        self.widget_manager.set_active("zoom_to_fit_toggle", toggle.get_active())
+        self.widget_manager.set_active("zoom_to_fit_button", toggle.get_active())
 
         self.refresh_info()
 
     def on_zoom_in(self, _):
-        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
-        self.widget_manager.get("zoom_to_fit_button").set_active(False)
+        self.widget_manager.set_active("zoom_to_fit_toggle", False)
+        self.widget_manager.set_active("zoom_to_fit_button", False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 1.05)
         self.refresh_info()
 
     def on_zoom_out(self, _):
-        self.widget_manager.get("zoom_to_fit_toggle").set_active(False)
-        self.widget_manager.get("zoom_to_fit_button").set_active(False)
+        self.widget_manager.set_active("zoom_to_fit_toggle", False)
+        self.widget_manager.set_active("zoom_to_fit_button", False)
         self.image_viewer.zoom_at(self.image_viewer.get_zoom_factor() * 0.95)
         self.refresh_info()
 
