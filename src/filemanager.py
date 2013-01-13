@@ -2,6 +2,7 @@ import os
 import copy
 
 from filefactory import FileFactory
+from imagefile import EmptyImage
 
 class Action:
     NORMAL = 0
@@ -13,6 +14,22 @@ class Action:
         self.description = description
         self.undo = undo
 
+# Decorator for methods to avoid executing its body
+# and perform the given action instead when the empty()
+# method of the classes returns True
+def if_empty(action):
+    def dec(func):
+        def decorated(self, *args):
+            if self.empty():
+                return action()
+            else:
+                return func(self, *args)
+        return decorated
+    return dec
+
+def skip_if_empty(func):
+    return if_empty(lambda: None)(func)
+
 class FileList:
     def __init__(self):
         self.files = None
@@ -22,13 +39,14 @@ class FileList:
         self.files = files
         self.actual = copy.copy(files)
 
+    @if_empty(lambda: EmptyImage())
     def get_item_at(self, index):
         return self.actual[index % len(self.actual)]
 
     def get_length(self):
         return len(self.actual)
 
-    def is_empty(self):
+    def empty(self):
         return not self.actual
 
     def insert(self, pos, item):
@@ -47,23 +65,13 @@ class FileList:
         self.actual = sorted(self.actual, key=key, reverse=reverse)
 
     def apply_filter(self, filter_):
-        filtered = filter(filter_.allowed, self.files)
-
-        if not len(filtered):
-            return False
-
-        self.actual = filtered
-        return True
-
-    def disable_filter(self):
-        self.actual = copy.copy(self.files)
+        self.actual = filter(filter_.allowed, self.files)
 
 class FileManager:
-    def __init__(self, on_list_empty, on_list_modified):
+    def __init__(self, on_list_modified):
         self.filelist = FileList()
         self.index = 0
 
-        self.on_list_empty = on_list_empty
         self.on_list_modified = on_list_modified
 
     def set_files(self, files):
@@ -78,6 +86,7 @@ class FileManager:
     def get_next_file(self):
         return self.filelist.get_item_at(self.index + 1)
 
+    @if_empty(lambda: -1)
     def get_current_index(self):
         return self.index
 
@@ -85,28 +94,33 @@ class FileManager:
         return self.filelist.get_length()
 
     def empty(self):
-        return self.filelist.is_empty()
+        return self.filelist.empty()
 
+    @skip_if_empty
     def go_first(self):
         self.index = 0
         self.on_list_modified()
 
+    @skip_if_empty
     def go_last(self):
         self.index = self.filelist.get_length() - 1
         self.on_list_modified()
 
+    @skip_if_empty
     def go_forward(self, steps):
         self.index += steps
         if self.index >= self.filelist.get_length():
             self.index = self.index - self.filelist.get_length()
         self.on_list_modified()
 
+    @skip_if_empty
     def go_backward(self, steps):
         self.index -= steps
         if self.index < 0:
             self.index = self.filelist.get_length() + self.index
         self.on_list_modified()
 
+    @skip_if_empty
     def go_file(self, filename):
         self.index = self.filelist.find(filename)
         self.on_list_modified()
@@ -123,6 +137,7 @@ class FileManager:
                            reverse=reverse)
         self.go_file(filename)
 
+    @skip_if_empty
     def rename_current(self, new_filename):
         current = self.get_current_file()
         orig_index = self.get_current_index()
@@ -149,6 +164,7 @@ class FileManager:
                       "'%s' renamed to '%s'" % (orig_filename, new_filename),
                       undo_action)
 
+    @skip_if_empty
     def move_current(self, target_dir, target_name=''):
         current = self.get_current_file()
         orig_index = self.get_current_index()
@@ -175,6 +191,7 @@ class FileManager:
                       "'%s' moved to '%s'" % (orig_filename, target_dir),
                       undo_action)
 
+    @skip_if_empty
     def delete_current(self):
         current = self.get_current_file()
         orig_index = self.get_current_index()
@@ -193,6 +210,7 @@ class FileManager:
                       "'%s' deleted" % (orig_filename),
                       undo_action)
 
+    @skip_if_empty
     def toggle_star(self):
         current = self.get_current_file()
         orig_filename = current.get_filename()
@@ -212,22 +230,14 @@ class FileManager:
         current = self.get_current_file()
         filename = current.get_filename()
 
-        if not self.filelist.apply_filter(filter_):
-            return False
+        self.filelist.apply_filter(filter_)
 
         if filter_.allowed(current):
             self.index = self.filelist.find(filename)
         else:
-            self.index = min(self.index, self.filelist.get_length() - 1)
+            self.index = min(self.index, max(self.filelist.get_length() - 1, 0))
 
         self.on_list_modified()
-        return True
-
-    def disable_filter(self):
-        current = self.get_current_file()
-        filename = current.get_filename()
-        self.filelist.disable_filter()
-        self.go_file(filename)
 
     # Internal helpers:
     def get_safe_candidate(self, target):
@@ -262,10 +272,8 @@ class FileManager:
     def on_current_eliminated(self):
         self.filelist.remove(self.index)
 
-        if self.filelist.is_empty():
-            self.on_list_empty()
-        else:
-            if self.index >= self.filelist.get_length():
-                self.index = self.index - self.filelist.get_length()
-            self.on_list_modified()
+        if self.index >= self.filelist.get_length():
+            self.index = self.index - self.filelist.get_length()
+
+        self.on_list_modified()
 

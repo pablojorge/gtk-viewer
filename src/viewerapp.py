@@ -371,6 +371,8 @@ class UndoStack:
         self.on_stack_empty()
 
     def push(self, action):
+        if not action:
+            return
         self.stack.append(action)
         self.on_push(action)
 
@@ -387,15 +389,14 @@ class UndoStack:
         return action
 
 class ViewerApp:
-    DEF_WIDTH = 1280
+    DEF_WIDTH = 1200
     DEF_HEIGHT = 768
     TH_SIZE = 200
     BG_COLOR = "#000000"
 
     def __init__(self, files, start_file, base_dir=None):
         ### Data definition
-        self.file_manager = FileManager(self.on_list_empty,
-                                        self.on_list_modified)
+        self.file_manager = FileManager(self.on_list_modified)
 
         self.files_order = None
         self.base_dir = base_dir
@@ -503,15 +504,7 @@ class ViewerApp:
 
         # Window composition end
 
-        if files:
-            self.set_files(files, start_file)
-        else:
-            open_dialog = OpenDialog(initial_dir=".", 
-                                     callback=self.on_file_selected)
-            open_dialog.run()
-
-            if self.file_manager.empty():
-                raise Exception("No files selected!")
+        self.set_files(files, start_file)
 
         # Show main window AFTER obtaining file list
         self.window.show_all()
@@ -998,18 +991,6 @@ class ViewerApp:
 
         self.undo_stack.push(self.file_manager.rename_current(new_name))
 
-    def on_list_empty(self):
-        if QuestionDialog(self.window, "No more files, select new one?").run():
-            initial_dir = None
-            if self.last_opened_file:
-                initial_dir = os.path.dirname(self.last_opened_file)
-            open_dialog = OpenDialog(initial_dir=initial_dir, 
-                                     callback=self.on_file_selected)
-            open_dialog.run()
-        else:
-            InfoDialog(self.window, "No more files, exiting").run()
-            self.quit_app()
-
     def on_list_modified(self):
         self.reload_viewer()
 
@@ -1366,46 +1347,24 @@ class ViewerApp:
         self.reorder_files()
 
     def on_filetype_toggle(self, toggle):
-        # create a copy of the filter:
-        filter_ = FileFilter.copy(self.filter_)
-
         for filetype in self.filter_.get_valid_filetypes():
             toggle_id = "filter_%s_toggle" % filetype
             if toggle is self.widget_manager.get(toggle_id):
                 break
 
-        with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
-            # update the filter to match the toggle state:
-            filter_.enable_filetype(filetype, filetype_toggle.get_active())
-
-            if not self.file_manager.apply_filter(filter_):
-                InfoDialog(self.window, "Unable to update filter").run()
-                # revert toggle:
-                filetype_toggle.set_active(not filetype_toggle.get_active())
-            else:
-                # switch to the new filter:
-                self.filter_ = filter_
+        # update the filter to match the toggle state:
+        self.filter_.enable_filetype(filetype, toggle.get_active())
+        self.file_manager.apply_filter(self.filter_)
 
     def on_status_toggle(self, toggle):
-        # create a copy of the filter:
-        filter_ = FileFilter.copy(self.filter_)
-
         for status in self.filter_.get_valid_status():
             toggle_id = "filter_%s_toggle" % status
             if toggle is self.widget_manager.get(toggle_id):
                 break
 
-        with self.widget_manager.get_blocked(toggle_id) as status_toggle:
-            # update the filter to match the toggle state:
-            filter_.enable_status(status, status_toggle.get_active())
-
-            if not self.file_manager.apply_filter(filter_):
-                InfoDialog(self.window, "Unable to update filter").run()
-                # revert toggle:
-                status_toggle.set_active(not status_toggle.get_active())
-            else:
-                # switch to the new filter:
-                self.filter_ = filter_
+        # update the filter to match the toggle state:
+        self.filter_.enable_status(status, toggle.get_active())
+        self.file_manager.apply_filter(self.filter_)
 
     def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()

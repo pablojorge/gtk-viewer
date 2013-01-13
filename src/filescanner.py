@@ -1,6 +1,5 @@
 import os
 import glob
-import copy
 
 import gtk
 
@@ -16,13 +15,6 @@ class FileFilter:
     def __init__(self):
         self.allowed_filetypes = set(FileFilter.get_valid_filetypes())
         self.allowed_status = set(FileFilter.get_valid_status())
-
-    @staticmethod
-    def copy(other):
-        filter_ = FileFilter()
-        filter_.allowed_filetypes = copy.copy(other.allowed_filetypes)
-        filter_.allowed_status = copy.copy(other.allowed_status)
-        return filter_
 
     def is_filetype_enabled(self, filetype):
         return filetype in self.allowed_filetypes

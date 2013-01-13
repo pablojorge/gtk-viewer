@@ -139,10 +139,7 @@ class ImageFile(File):
 
     @cached(pixbuf_cache)
     def get_pixbuf(self):
-        try:
-            return gtk.gdk.pixbuf_new_from_file(self.get_filename())
-        except:
-            return self.get_empty_pixbuf()
+        return gtk.gdk.pixbuf_new_from_file(self.get_filename())
 
     def toggle_flip(self, horizontal):
         if horizontal:
@@ -182,3 +179,21 @@ class ImageFile(File):
         pixbuf.fill(0)
         return pixbuf
 
+class EmptyImage(ImageFile):
+    def __init__(self):
+        ImageFile.__init__(self, "")
+
+    def get_pixbuf(self):
+        return self.get_empty_pixbuf()
+
+    def get_pixbuf_at_size(self, width, height):
+        return self.get_empty_pixbuf()
+
+    def get_mtime(self):
+        return "None"
+
+    def get_filesize(self):
+        return Size(0)
+
+    def get_sha1(self):
+        return "None"
