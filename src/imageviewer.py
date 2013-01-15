@@ -16,6 +16,11 @@ class ImageViewer:
         if zoom_factor > 1:
             self.zoom_factor = zoom_factor
 
+    def reset(self):
+        self.image_file = None
+        self.set_zoom_factor(100)
+        self.redraw()
+
     def load(self, image_file):
         self.image_file = image_file
         self.set_zoom_factor(100)

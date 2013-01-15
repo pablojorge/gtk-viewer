@@ -23,6 +23,7 @@ S: star/unstar image
 T: thumbnails on/off
 U: undo
 V: view image full
+W:
 X: external viewer
 Y:
 Z: toggle zoom mode

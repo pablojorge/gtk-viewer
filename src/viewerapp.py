@@ -7,9 +7,8 @@ from filefactory import FileFactory
 
 from imagefile import Size
 from filemanager import Action, FileManager
-from dialogs import (OpenDialog, InfoDialog, QuestionDialog, AboutDialog,
-                     FileSelectorDialog, BasedirSelectorDialog, TargetSelectorDialog, 
-                     RenameDialog)
+from dialogs import (OpenDialog, InfoDialog, AboutDialog, FileSelectorDialog, 
+                     BasedirSelectorDialog, TargetSelectorDialog, RenameDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 
 from filescanner import FileFilter, FileScanner
@@ -246,7 +245,7 @@ class Pinbar:
     def __init__(self, main_app):
         self.main_app = main_app
 
-        self.active = False
+        self.active = True
         self.pinbar_size = None
         self.thumb_array = []
         self.target_array = []
@@ -268,7 +267,7 @@ class Pinbar:
             th.fill()
 
             ebox = factory.get_event_box(child=th.get_widget(),
-                                         bg_color=None,
+                                         bg_color="#000000",
                                          on_button_press_event=self.on_th_press(i),
                                          on_scroll_event=lambda: None)
             tvbox.pack_start(ebox, True, False, 0)
@@ -319,6 +318,16 @@ class Pinbar:
                 self.associate_target(index)
         return handler
 
+    def on_reset(self, _):
+        if self.is_active():
+            for i in range(self.THUMB_COUNT):
+                self.reset_target(i)
+
+    def on_multi_associate(self, _):
+        if self.is_active():
+            for i in range(self.THUMB_COUNT):
+                self.associate_target(i)
+
     def send_to_target(self, index):
         target = self.target_array[index]
 
@@ -341,10 +350,18 @@ class Pinbar:
                                                                 os.path.split(dirname)[-1])
             self.label_array[index].set_markup(label)
 
-        FileSelectorDialog("Select target dir", 
+        FileSelectorDialog("Select target directory for bucket %i" % (index+1), 
                            self.main_app.get_base_dir(),
                            None, 
                            on_file_selected).run()
+
+    def reset_target(self, index):
+        thumb = self.thumb_array[index]
+        thumb.reset()
+        thumb.set_tooltip_text(None)
+        self.target_array[index] = None
+        label = "<span underline='single'>%s</span>" % ((index+1) % self.THUMB_COUNT)
+        self.label_array[index].set_markup(label)
 
     def get_widget(self):
         return self.hbox
@@ -688,6 +705,10 @@ class ViewerApp:
                              "active" : True,
                              "key" : "pinbar_toggle",
                              "handler" : self.on_show_pinbar},
+                            {"text" : "Associate all buckets",
+                             "handler" : pinbar.on_multi_associate},
+                            {"text" : "Reset all buckets",
+                             "handler" : pinbar.on_reset},
                             {"separator" : True},
                             {"menu" : {"text" : "Send to",
                                        "items" : [pinbar_send(0), pinbar_send(1), 
