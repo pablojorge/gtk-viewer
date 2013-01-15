@@ -652,6 +652,10 @@ class ViewerApp:
                              "key" : "filter_epubs_toggle",
                              "active" : True,
                              "handler" : self.on_filetype_toggle},
+                            {"text" : "Show all filetypes",
+                             "handler" : self.on_show_all_filetypes},
+                            {"text" : "Hide all filetypes",
+                             "handler" : self.on_hide_all_filetypes},
                             {"separator" : True},
                             {"toggle" : "Show starreds",
                              "key" : "filter_starred_toggle",
@@ -661,6 +665,10 @@ class ViewerApp:
                              "key" : "filter_unstarred_toggle",
                              "active" : True,
                              "handler" : self.on_status_toggle},
+                            {"text" : "Show all statuses",
+                             "handler" : self.on_show_all_status},
+                            {"text" : "Hide all statuses",
+                             "handler" : self.on_hide_all_status},
                             ]},
                 {"text" : "_Go",
                  "items" : [{"stock" : gtk.STOCK_GOTO_FIRST,
@@ -926,17 +934,22 @@ class ViewerApp:
         self.reload_viewer()
 
     def clear_filters(self):
+        self.toggle_all_filetypes(True)
+        self.toggle_all_status(True)
+
+    def toggle_all_filetypes(self, value):
         for filetype in self.filter_.get_valid_filetypes():
             toggle_id = "filter_%s_toggle" % filetype
             with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
-                filetype_toggle.set_active(True)
-            self.filter_.enable_filetype(filetype, True)
+                filetype_toggle.set_active(value)
+            self.filter_.enable_filetype(filetype, value)
 
+    def toggle_all_status(self, value):
         for status in self.filter_.get_valid_status():
             toggle_id = "filter_%s_toggle" % status
             with self.widget_manager.get_blocked(toggle_id) as status_toggle:
-                status_toggle.set_active(True)
-            self.filter_.enable_status(status, True)
+                status_toggle.set_active(value)
+            self.filter_.enable_status(status, value)
 
     ## Gtk event handlers
     def on_destroy(self, widget):
@@ -1385,6 +1398,22 @@ class ViewerApp:
 
         # update the filter to match the toggle state:
         self.filter_.enable_status(status, toggle.get_active())
+        self.file_manager.apply_filter(self.filter_)
+
+    def on_show_all_filetypes(self, _):
+        self.toggle_all_filetypes(True)
+        self.file_manager.apply_filter(self.filter_)
+
+    def on_hide_all_filetypes(self, _):
+        self.toggle_all_filetypes(False)
+        self.file_manager.apply_filter(self.filter_)
+
+    def on_show_all_status(self, _):
+        self.toggle_all_status(True)
+        self.file_manager.apply_filter(self.filter_)
+
+    def on_hide_all_status(self, _):
+        self.toggle_all_status(False)
         self.file_manager.apply_filter(self.filter_)
 
     def on_external_open(self, _):

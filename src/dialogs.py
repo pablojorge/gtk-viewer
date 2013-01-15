@@ -48,6 +48,8 @@ class DirectorySelectorDialog:
             if files:
                 self.file_manager = FileManager(on_list_modified=lambda: None)
                 self.file_manager.set_files(files)
+                self.file_manager.sort_by_date(True)
+                self.file_manager.go_first()
                 self.th_viewer.load(self.file_manager.get_current_file())
                 self.th_viewer.show()
             else:

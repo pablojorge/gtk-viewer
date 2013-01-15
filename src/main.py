@@ -7,7 +7,6 @@ from filefactory import FileFactory
 from filescanner import FileScanner
 from viewerapp import ViewerApp
 
-# TODO Toggle all filters
 # TODO Asynchronous loading of images
 # TODO Support for copying files
 # TODO Show images metadata
