@@ -8,7 +8,8 @@ from filefactory import FileFactory
 from imagefile import Size
 from filemanager import Action, FileManager
 from dialogs import (OpenDialog, InfoDialog, AboutDialog, FileSelectorDialog, 
-                     BasedirSelectorDialog, TargetSelectorDialog, RenameDialog)
+                     BasedirSelectorDialog, TargetSelectorDialog, RenameDialog,
+                     DirectorySelectorDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 
 from filescanner import FileFilter, FileScanner
@@ -320,13 +321,41 @@ class Pinbar:
 
     def on_reset(self, _):
         if self.is_active():
-            for i in range(self.THUMB_COUNT):
-                self.reset_target(i)
+            self.reset_targets()
 
     def on_multi_associate(self, _):
         if self.is_active():
             for i in range(self.THUMB_COUNT):
                 self.associate_target(i)
+
+    def on_auto_associate(self, _):
+        def on_dir_selected(selection):
+            scanner = FileScanner()
+            dirs = scanner.get_dirs_from_dir(selection)
+
+            if len(dirs) > self.THUMB_COUNT:
+                InfoDialog(self.main_app.window,
+                           "Too many categories in %s (%d, maximum allowed: %d)" \
+                            % (selection, len(dirs), self.THUMB_COUNT)).run()
+                return
+
+            self.reset_targets()
+
+            for index, dirname in enumerate(dirs):
+                files = scanner.get_files_from_dir(dirname)
+                if files:
+                    self.file_manager = FileManager(on_list_modified=lambda: None)
+                    self.file_manager.set_files(files)
+                    self.file_manager.sort_by_date(True)
+                    self.file_manager.go_first()
+                    self.set_target(index, self.file_manager.get_current_file(), dirname)
+                else:
+                    self.set_target(index, None, dirname)
+
+        DirectorySelectorDialog("Select directory containing categories", 
+                                self.main_app.get_base_dir(),
+                                [], 
+                                on_dir_selected).run()
 
     def send_to_target(self, index):
         target = self.target_array[index]
@@ -340,15 +369,7 @@ class Pinbar:
         def on_file_selected(selection):
             imgfile = FileFactory.create(selection)
             dirname = imgfile.get_dirname()
-
-            thumb = self.thumb_array[index]
-            thumb.load(imgfile)
-            thumb.set_tooltip_text(dirname)
-
-            self.target_array[index] = dirname
-            label = "<span underline='single'>%s</span> %s" % ((index+1) % self.THUMB_COUNT, 
-                                                                os.path.split(dirname)[-1])
-            self.label_array[index].set_markup(label)
+            self.set_target(index, imgfile, dirname)
 
         FileSelectorDialog("Select target directory for bucket %i" % (index+1), 
                            self.main_app.get_base_dir(),
@@ -356,11 +377,29 @@ class Pinbar:
                            on_file_selected).run()
 
     def reset_target(self, index):
+        self.set_target(index, None, None)
+
+    def reset_targets(self):
+        for i in range(self.THUMB_COUNT):
+            self.reset_target(i)
+
+    def set_target(self, index, imgfile, dirname):
         thumb = self.thumb_array[index]
-        thumb.reset()
-        thumb.set_tooltip_text(None)
-        self.target_array[index] = None
+
+        if imgfile:
+            thumb.load(imgfile)
+        else:
+            thumb.reset()
+
+        thumb.set_tooltip_text(dirname)
+
+        self.target_array[index] = dirname
+
         label = "<span underline='single'>%s</span>" % ((index+1) % self.THUMB_COUNT)
+
+        if dirname:
+            label += " %s" % os.path.split(dirname)[-1]
+
         self.label_array[index].set_markup(label)
 
     def get_widget(self):
@@ -715,6 +754,8 @@ class ViewerApp:
                              "handler" : self.on_show_pinbar},
                             {"text" : "Associate all buckets",
                              "handler" : pinbar.on_multi_associate},
+                            {"text" : "Auto associate buckets",
+                             "handler" : pinbar.on_auto_associate},
                             {"text" : "Reset all buckets",
                              "handler" : pinbar.on_reset},
                             {"separator" : True},

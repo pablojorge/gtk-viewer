@@ -94,6 +94,15 @@ class FileScanner:
             self.filter_ = FileFilter()
         self.recursive = recursive
 
+    def get_dirs_from_dir(self, directory):
+        dirs = []
+
+        for entry in glob.glob(os.path.join(directory, "*")):
+            if os.path.isdir(entry):
+                dirs.append(entry)
+
+        return sorted(dirs)
+                
     def get_files_from_dir(self, directory):
         files = []
 
