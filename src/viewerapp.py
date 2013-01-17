@@ -1,5 +1,6 @@
 import os
 import signal
+import cgi
 
 import gtk
 
@@ -1147,7 +1148,8 @@ class ViewerApp:
 
     def refresh_filename(self):
         image_file = self.file_manager.get_current_file()
-        markup = "<b><span foreground='white'>%s</span></b>" % image_file.get_filename()
+        filename = cgi.escape(image_file.get_filename())
+        markup = "<b><span foreground='white'>%s</span></b>" % filename
         self.file_name.set_markup(markup)
 
     def refresh_status(self):

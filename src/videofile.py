@@ -27,26 +27,32 @@ class VideoFile(ImageFile):
                                            seconds=st_time.tm_sec)
                 return delta.seconds
 
+        return 0
+
     @cached(video_cache)
     def get_pixbuf(self):
         second_cap = int(round(self.get_duration() * 0.2))
         tmp_dir = "/tmp" # XXX tempfile?
         tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
         tmp_img = "%s-000.jpg" % tmp_root
-        execute(["ffmpeg", "-ss", str(second_cap), 
-                 "-i", self.get_filename(), 
-                 "-vframes", "1",
-                 "-an",
-                 tmp_img])
+
+        try:
+            execute(["ffmpeg", "-ss", str(second_cap), 
+                     "-i", self.get_filename(), 
+                     "-vframes", "1",
+                     "-an",
+                     tmp_img])
+        except:
+            print "Warning: unable to extract thumbnail from '%s'" % self.get_basename()
+            return self.get_empty_pixbuf()
+
         try:
             pixbuf = gtk.gdk.pixbuf_new_from_file(tmp_img)
             os.unlink(tmp_img)
             return pixbuf
         except:
             print "Warning: unable to open", tmp_img
-            image = gtk.Image()
-            image.set_from_stock("",1)
-            return image.get_pixbuf()
+            return self.get_empty_pixbuf()
 
     def get_sha1(self):
         # avoiding this for video files
