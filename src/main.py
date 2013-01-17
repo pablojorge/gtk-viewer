@@ -7,16 +7,6 @@ from filefactory import FileFactory
 from filescanner import FileScanner
 from viewerapp import ViewerApp
 
-# TODO Asynchronous loading of images
-# TODO Support for copying files
-# TODO Show images metadata
-# TODO Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)
-# TODO Undo pane
-# TODO Log pane
-# TODO Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
-# TODO Thumbnail view (complete, as a bar or both)
-# TODO Support for delete / undelete in Mac OS X
-
 def check_directories(args):
     for arg in args:
         for dirpath, dirnames, filenames in os.walk(arg):

@@ -344,11 +344,11 @@ class Pinbar:
             for index, dirname in enumerate(dirs):
                 files = scanner.get_files_from_dir(dirname)
                 if files:
-                    self.file_manager = FileManager(on_list_modified=lambda: None)
-                    self.file_manager.set_files(files)
-                    self.file_manager.sort_by_date(True)
-                    self.file_manager.go_first()
-                    self.set_target(index, self.file_manager.get_current_file(), dirname)
+                    file_manager = FileManager(on_list_modified=lambda: None)
+                    file_manager.set_files(files)
+                    file_manager.sort_by_date(True)
+                    file_manager.go_first()
+                    self.set_target(index, file_manager.get_current_file(), dirname)
                 else:
                     self.set_target(index, None, dirname)
 

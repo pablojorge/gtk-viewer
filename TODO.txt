@@ -1,0 +1,20 @@
+Bugs:
+ - Adjust image size when image is rotated
+ - When the filelist is filtered and an item is put back (after an undo)
+   it may end up misplaced in the original (non-filtered) list
+
+Enhancements:
+ - Use tempfile to extract thumbnails in pdffile and videofile
+ - Asynchronous loading of images
+ - Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
+ - Support for delete / undelete in Mac OS X
+ - Application name and icon
+
+Features:
+ - Support for copying files
+ - Show images metadata
+ - Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)
+ - Undo pane
+ - Log pane
+ - Thumbnail view (complete, as a bar or both)
+
