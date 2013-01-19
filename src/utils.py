@@ -1,10 +1,23 @@
 import os
+import sys
 import glob
 import shutil
 import subprocess
 
 import gio
 
+# Python tricks:
+def trace(prefix):
+    def decorator(func):
+        def wrapper(*args):
+            print "%s.%s: %s -> " % (prefix, func.__name__, args)
+            ret = func(*args)
+            #sys.stdout.write("%s\n" % ret)
+            return ret
+        return wrapper
+    return decorator
+
+# System interaction:
 def execute(args, check_retcode=True):
     popen = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = popen.communicate()

@@ -1,4 +1,5 @@
 import gtk
+import math
 
 class ImageViewer:
     def __init__(self):
@@ -82,6 +83,8 @@ class ThumbnailViewer(ImageViewer):
 
     def set_size(self, size):
         self.th_size = size
+        self.widget.set_size_request(self.th_size, self.th_size)
+        self.force_zoom(self.th_size, self.th_size)
         self.redraw()
 
     def load(self, image_file):
@@ -97,8 +100,8 @@ class ThumbnailViewer(ImageViewer):
 
         dimensions = self.image_file.get_dimensions()
 
-        width = int((dimensions.get_width() * self.zoom_factor) / 100)
-        height = int((dimensions.get_height() * self.zoom_factor) / 100)
+        width = int(math.ceil((dimensions.get_width() * self.zoom_factor) / 100))
+        height = int(math.ceil((dimensions.get_height() * self.zoom_factor) / 100))
 
         self.widget.set_from_pixbuf(self.image_file.get_pixbuf_at_size(width, height))
 

@@ -201,3 +201,23 @@ class EmptyImage(ImageFile):
 
     def get_sha1(self):
         return "None"
+
+class GTKIconImage(ImageFile):
+    def __init__(self, stock_id, size):
+        ImageFile.__init__(self, "")
+        self.stock_id = stock_id
+        self.size = size
+
+    def get_pixbuf(self):
+        theme = gtk.icon_theme_get_default()
+        return theme.load_icon(self.stock_id, self.size, 0)
+
+    def __repr__(self):
+        return "GTKIconImage(%s, %d)" % (self.stock_id, self.size)
+
+    def get_pixbuf_at_size(self, width, height):
+        theme = gtk.icon_theme_get_default()
+        return theme.load_icon(self.stock_id, width, 0)
+
+    def get_dimensions(self):
+        return ImageDimensions(self.size, self.size)

@@ -6,7 +6,7 @@ import gtk
 
 from filefactory import FileFactory
 
-from imagefile import Size
+from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
 from dialogs import (OpenDialog, InfoDialog, AboutDialog, FileSelectorDialog, 
                      BasedirSelectorDialog, TargetSelectorDialog, RenameDialog,
@@ -269,13 +269,12 @@ class Pinbar:
             th.fill()
 
             ebox = factory.get_event_box(child=th.get_widget(),
-                                         bg_color="#000000",
+                                         bg_color=None,
                                          on_button_press_event=self.on_th_press(i),
                                          on_scroll_event=lambda: None)
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
-            label.set_markup("<span underline='single'>%s</span>" % ((i+1) % self.THUMB_COUNT))
             self.label_array.append(label)
 
             ebox = factory.get_event_box(child=label,
@@ -284,8 +283,10 @@ class Pinbar:
                                          on_scroll_event=lambda: None)
             tvbox.pack_start(ebox, False, False, 1)
 
+        self.reset_targets()
+
     def on_size_allocate(self, widget, event, data=None):
-        allocation = self.hbox.allocation
+        allocation = widget.allocation
         width, height = allocation.width, allocation.height
 
         if self.pinbar_size != (width, height):
@@ -351,12 +352,13 @@ class Pinbar:
                     file_manager.go_first()
                     self.set_target(index, file_manager.get_current_file(), dirname)
                 else:
-                    self.set_target(index, None, dirname)
+                    self.set_target(index, GTKIconImage(gtk.STOCK_DIRECTORY, 128), dirname)
 
-        DirectorySelectorDialog("Select directory containing categories", 
-                                self.main_app.get_base_dir(),
-                                [], 
-                                on_dir_selected).run()
+        if self.is_active():
+            DirectorySelectorDialog("Select directory containing categories", 
+                                    self.main_app.get_base_dir(),
+                                    [], 
+                                    on_dir_selected).run()
 
     def send_to_target(self, index):
         target = self.target_array[index]
@@ -378,7 +380,7 @@ class Pinbar:
                            on_file_selected).run()
 
     def reset_target(self, index):
-        self.set_target(index, None, None)
+        self.set_target(index, GTKIconImage(gtk.STOCK_DIALOG_QUESTION, 128), None) 
 
     def reset_targets(self):
         for i in range(self.THUMB_COUNT):
@@ -566,6 +568,7 @@ class ViewerApp:
         # Show main window AFTER obtaining file list
         self.window.show_all()
         self.window.set_focus(None)
+        self.pinbar.hide() # But initially hide the pinbar
 
     def get_menubar_entries(self, pinbar):
         pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
@@ -750,7 +753,6 @@ class ViewerApp:
                 {"text" : "_Pinbar",
                  "items" : [{"toggle" : "Show pinbar",
                              "accel" : "P",
-                             "active" : True,
                              "key" : "pinbar_toggle",
                              "handler" : self.on_show_pinbar},
                             {"text" : "Associate all buckets",
