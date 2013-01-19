@@ -29,7 +29,6 @@ class ImageViewer:
 
     def load_at_size(self, image_file, width, height):
         self.image_file = image_file
-        self.widget.set_size_request(width, height)
         self.force_zoom(width, height)
         self.redraw()
 
@@ -83,7 +82,6 @@ class ThumbnailViewer(ImageViewer):
 
     def set_size(self, size):
         self.th_size = size
-        self.widget.set_size_request(self.th_size, self.th_size)
         self.force_zoom(self.th_size, self.th_size)
         self.redraw()
 

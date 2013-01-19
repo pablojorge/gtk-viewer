@@ -244,7 +244,7 @@ class WidgetFactory:
 class Pinbar:
     THUMB_COUNT = 10
 
-    def __init__(self, main_app):
+    def __init__(self, main_app, default_width):
         self.main_app = main_app
 
         self.active = True
@@ -263,7 +263,7 @@ class Pinbar:
             tvbox = gtk.VBox(False, 0)
             self.hbox.pack_start(tvbox, False, False, 1)
 
-            th = ThumbnailViewer(1)
+            th = ThumbnailViewer(self.get_thumb_width(default_width))
             self.thumb_array.append(th)
             self.target_array.append(None)
             th.fill()
@@ -275,6 +275,7 @@ class Pinbar:
             tvbox.pack_start(ebox, True, False, 0)
             
             label = gtk.Label()
+            label.set_size_request(self.get_thumb_width(default_width), -1)
             self.label_array.append(label)
 
             ebox = factory.get_event_box(child=label,
@@ -285,6 +286,9 @@ class Pinbar:
 
         self.reset_targets()
 
+    def get_thumb_width(self, width):
+        return (width-(self.THUMB_COUNT+1)) / self.THUMB_COUNT
+
     def on_size_allocate(self, widget, event, data=None):
         allocation = widget.allocation
         width, height = allocation.width, allocation.height
@@ -292,13 +296,8 @@ class Pinbar:
         if self.pinbar_size != (width, height):
             self.pinbar_size = (width, height)
 
-            new_width = (width-(self.THUMB_COUNT+1)) / self.THUMB_COUNT
-
             for thumb in self.thumb_array:
-                thumb.set_size(new_width)
-
-            for label in self.label_array:
-                label.set_size_request(new_width, 20)
+                thumb.set_size(self.get_thumb_width(width))
 
     def on_th_press(self, index):
         def handler(widget, event, data=None):
@@ -482,7 +481,7 @@ class ViewerApp:
         self.window.add(vbox)
 
         # Must be instatiated first to associate the accelerators:
-        self.pinbar = Pinbar(self)
+        self.pinbar = Pinbar(self, self.DEF_WIDTH)
 
         # Menubar
         menus = self.get_menubar_entries(self.pinbar)
@@ -545,6 +544,7 @@ class ViewerApp:
         # Name label
         self.file_name = gtk.Label()
         self.file_name.set_selectable(True)
+        self.file_name.set_size_request(self.DEF_WIDTH, -1)
         ebox = factory.get_event_box(child=self.file_name,
                                      bg_color=self.BG_COLOR,
                                      on_button_press_event=lambda: None,
@@ -556,6 +556,7 @@ class ViewerApp:
         vbox.pack_start(self.status_bar, False, False, 5)
 
         self.file_info = gtk.Label()
+        self.status_bar.set_size_request(self.DEF_WIDTH, -1)
         self.file_index = gtk.Label()
 
         self.status_bar.pack_start(self.file_info, False, False, 10)
