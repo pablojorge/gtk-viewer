@@ -7,7 +7,7 @@ import string
 import gtk
 
 from cache import Cache, cached
-from utils import trash, untrash, external_open
+from system import trash, untrash, external_open
 
 class ImageDimensions:
     def __init__(self, width, height):

@@ -14,7 +14,7 @@ from dialogs import (OpenDialog, InfoDialog, AboutDialog, FileSelectorDialog,
 from imageviewer import ImageViewer, ThumbnailViewer
 
 from filescanner import FileFilter, FileScanner
-from utils import get_process_memory_usage
+from system import get_process_memory_usage
 
 class BlockedWidget:
     def __init__(self, widget, handler_id):
