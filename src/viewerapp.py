@@ -3,6 +3,7 @@ import signal
 import cgi
 
 import gtk
+import gobject
 
 from filefactory import FileFactory
 
@@ -1517,5 +1518,6 @@ class ViewerApp:
     ##
 
     def run(self):
+        gobject.threads_init()
         gtk.main()
 

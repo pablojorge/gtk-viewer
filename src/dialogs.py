@@ -11,6 +11,8 @@ from videofile import VideoFile
 
 from filescanner import FileScanner
 
+from gallery import Gallery
+
 class DirectorySelectorDialog:
     def __init__(self, title, initial_dir, last_targets, callback):
         self.callback = callback
@@ -76,7 +78,7 @@ class DirectorySelectorDialog:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
-class FileSelectorDialog:
+class FileSelectorDialog1:
     def __init__(self, title, initial_dir, initial_filename, callback):
         self.callback = callback
 
@@ -150,6 +152,13 @@ class FileSelectorDialog:
 
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
+
+class FileSelectorDialog:
+    def __init__(self, title, initial_dir, initial_filename, callback):
+        self.gallery = Gallery(4, initial_dir, callback)
+
+    def run(self):
+        self.gallery.run()
 
 class TargetSelectorDialog(DirectorySelectorDialog):
     def __init__(self, initial_dir, last_targets, callback):
