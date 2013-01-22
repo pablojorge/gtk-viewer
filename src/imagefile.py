@@ -174,6 +174,19 @@ class ImageFile(File):
         return ImageDimensions(self.get_pixbuf().get_width(), 
                                self.get_pixbuf().get_height())
 
+    def get_dimensions_to_fit(self, width, height):
+        dimensions = self.get_dimensions()
+
+        factor_w = float(width) / dimensions.get_width()
+        factor_h = float(height) / dimensions.get_height()
+
+        factor = min(factor_w, factor_h)
+
+        width = int(dimensions.get_width() * factor)
+        height = int(dimensions.get_height() * factor)
+
+        return width, height
+
     def get_empty_pixbuf(self):
         pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
                                 has_alpha=False, 

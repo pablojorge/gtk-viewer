@@ -375,6 +375,7 @@ class Pinbar:
             self.set_target(index, imgfile, dirname)
 
         FileSelectorDialog("Select target directory for bucket %i" % (index+1), 
+                           self.main_app.window,
                            self.main_app.get_base_dir(),
                            None, 
                            on_file_selected).run()
@@ -1345,12 +1346,12 @@ class ViewerApp:
 
     def on_open_file(self, _):
         initial_dir = self.file_manager.get_current_file().get_dirname()
-        open_dialog = OpenDialog(initial_dir, self.on_file_selected)
+        open_dialog = OpenDialog(self.window, initial_dir, self.on_file_selected)
         open_dialog.run()
 
     def on_rename_current(self, _):
         filename = self.file_manager.get_current_file().get_filename()
-        renamer = RenameDialog(filename, self.on_new_name_selected)
+        renamer = RenameDialog(self.window, filename, self.on_new_name_selected)
         renamer.run()
 
     def on_select_base_dir(self, _):

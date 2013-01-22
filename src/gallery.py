@@ -9,7 +9,6 @@ import gobject
 from threading import Thread, Lock, Condition
 
 from imagefile import GTKIconImage
-from filefactory import FileFactory
 from filescanner import FileScanner
 from filemanager import FileManager
 
@@ -17,19 +16,6 @@ class GalleryItem:
     def __init__(self, item, size):
         self.item = item
         self.size = size
-
-    def get_scaled_pixbuf(self, image):
-        im_dim = image.get_dimensions()
-
-        zw = (float(self.size) / im_dim.get_width()) * 99
-        zh = (float(self.size) / im_dim.get_height()) * 99
-
-        factor = min(zw, zh)
-
-        width = int((im_dim.get_width() * factor) / 100)
-        height = int((im_dim.get_height() * factor) / 100)
-
-        return image.get_pixbuf_at_size(width, height)
 
     def append_to(self, liststore):
         pass
@@ -48,11 +34,9 @@ class ImageItem(GalleryItem):
                           self.item.get_filename()])
 
     def update_liststore(self, liststore, index):
-        print "Updating image at index", index
         iter_ = liststore.get_iter((index,))
-        print "Generating pixbuf"
-        pixbuf = self.get_scaled_pixbuf(self.item)
-        print "Scheduling pixbuf update"
+        width, height = self.item.get_dimensions_to_fit(self.size, self.size)
+        pixbuf = self.item.get_pixbuf_at_size(width, height)
         gobject.idle_add(lambda iter_, pixbuf: liststore.set_value(iter_, 0, pixbuf),
                          iter_,
                          pixbuf)
@@ -66,30 +50,53 @@ class DirectoryItem(GalleryItem):
         GalleryItem.__init__(self, item, size)
 
     def append_to(self, liststore):
-        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
+        unknown_icon = GTKIconImage(gtk.STOCK_MISSING_IMAGE, self.size)
 
-        liststore.append([dir_icon.get_pixbuf(),
-                          "[%s]" % os.path.basename(self.item),
+        liststore.append([self.get_mixed_thumbnail(unknown_icon),
+                          os.path.basename(self.item),
                           self.item])
 
     def update_liststore(self, liststore, index):
-        print "Updating dir at index", index
+        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
         iter_ = liststore.get_iter((index,))
-        print "Generating thumbnail for", self.item
+
         scanner = FileScanner()
         files = scanner.get_files_from_dir(self.item)
+
         if files:
             file_manager = FileManager(on_list_modified=lambda: None)
             file_manager.set_files(files)
             file_manager.sort_by_date(True)
             file_manager.go_first()
-            pixbuf = self.get_scaled_pixbuf(file_manager.get_current_file())
-            gobject.idle_add(lambda iter_, pixbuf: liststore.set_value(iter_, 0, pixbuf),
-                             iter_,
-                             pixbuf)
+            pixbuf = self.get_mixed_thumbnail(file_manager.get_current_file())
         else:
-            print "Empty dir"
+            pixbuf = dir_icon.get_pixbuf()
+
+        gobject.idle_add(lambda iter_, pb: liststore.set_value(iter_, 0, pixbuf),
+                         iter_,
+                         pixbuf)
         
+    def get_mixed_thumbnail(self, imagefile):
+        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
+        ret = dir_icon.get_pixbuf()
+
+        # XXX constants
+
+        width, height = imagefile.get_dimensions_to_fit(self.size * .88, self.size * .54)
+        pixbuf = imagefile.get_pixbuf_at_size(width, height)
+
+        offset_x = int((ret.get_width() - pixbuf.get_width()) / 2)
+        offset_y = int((ret.get_height() * 0.62) - (pixbuf.get_height()/2)) 
+
+        pixbuf.composite(ret, 
+                         offset_x, offset_y, 
+                         pixbuf.get_width(), pixbuf.get_height(), 
+                         offset_x, offset_y, 
+                         1, 1, 
+                         gtk.gdk.INTERP_HYPER, 
+                         255)
+
+        return ret
 
     def on_selected(self, gallery):
         gallery.curdir = self.item
@@ -97,6 +104,11 @@ class DirectoryItem(GalleryItem):
         gallery.update_entries()
         gallery.update_store()
 
+# Load the thumbnails in the background. The basic idea is that
+# this separate thread prepares the thumbnails and asks the main
+# thread to update the UI once a new thumbnail is available
+# (See http://faq.pygtk.org/index.py?file=faq20.006.htp&req=show)
+# XXX generic (includes idle_add)
 class ThumbnailLoader(Thread):
     def __init__(self):
         Thread.__init__(self)
@@ -106,23 +118,22 @@ class ThumbnailLoader(Thread):
         self.queue = []
 
     def run(self):
-        print "Thread running!"
         while True:
             job = None
             with self.cond:
                 if self.stopped:
-                    print "Exiting thread loop"
                     return
                 if not self.queue:
                     self.cond.wait()
                 else:
                     job, params = self.queue.pop(0)
             if job:
-                print "Doing job!"
-                job(*params)
+                try:
+                    job(*params)
+                except Exception, e:
+                    print "Warning:", e
 
     def stop(self):
-        print "Thread being stopped..."
         with self.cond:
             self.stopped = True
             self.cond.notify_all()
@@ -132,18 +143,17 @@ class ThumbnailLoader(Thread):
             self.queue = []
             self.cond.notify_all()
 
-    def push(self, work):
+    def push(self, job):
         with self.cond:
-            for job in work:
-                self.queue.append(job)
+            self.queue.append(job)
             self.cond.notify_all()
 
 class Gallery:
-    DEFAULT_HEIGHT = 600
-    THUMB_SIZE = 128
-    THUMB_SPACING = 15
+    DEFAULT_HEIGHT = 600 # XXX variable
+    THUMB_SIZE = 256 # XXX variable
+    THUMB_SPACING = 15 # XXX apply and variable?
     
-    def __init__(self, columns, dirname, callback):
+    def __init__(self, columns, title, parent, dirname, callback):
         self.callback = callback
 
         self.window = gtk.Window()
@@ -151,11 +161,19 @@ class Gallery:
                                 self.THUMB_SPACING * columns, 
                                 self.DEFAULT_HEIGHT)
         self.window.set_position(gtk.WIN_POS_CENTER)
-        self.window.set_resizable(False) # para dialog, para galeria deberia ser true
+        self.window.set_resizable(False) # XXX depends on type
+        # XXX depends on type
+        self.window.set_modal(True)
+        self.window.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_DIALOG)
+        self.window.set_transient_for(parent)
         
+        # XXX escape q to exit dialog? / Enter default
+        # XXX type to restrict entries (for entry in model remove if not text in str)
+
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
 
+        # Toolbar
         toolbar = gtk.Toolbar()
         toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
 
@@ -172,6 +190,9 @@ class Gallery:
         toolbar.insert(button, -1)
         self.go_up = button
 
+        # XXX curdir label or textbox
+
+        # Iconview
         self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
 
         iconview = gtk.IconView()
@@ -192,6 +213,7 @@ class Gallery:
 
         vbox.pack_start(scrolled, True, True, 0)
 
+        # Buttonbar
         buttonbar = gtk.HBox(False, 0)
 
         button = gtk.Button(stock=gtk.STOCK_OK)
@@ -229,21 +251,25 @@ class Gallery:
         for directory in scanner.get_dirs_from_dir(self.curdir):
             self.items.append(DirectoryItem(directory, self.THUMB_SIZE/2))
     
-        for filename in scanner.get_files_from_dir(self.curdir):
-            imgfile = FileFactory.create(filename)
-            self.items.append(ImageItem(imgfile, self.THUMB_SIZE/2))
+        files = scanner.get_files_from_dir(self.curdir)
+        
+        file_manager = FileManager(on_list_modified=lambda: None)
+        file_manager.set_files(files)
+        file_manager.sort_by_date(True)
+        file_manager.go_first()
+
+        for _ in range(file_manager.get_list_length()):
+            self.items.append(ImageItem(file_manager.get_current_file(), 
+                                        self.THUMB_SIZE/2))
+            file_manager.go_forward(1)
 
     def update_store(self):
         self.loader.clear()
         self.liststore.clear()
-        work = []
 
         for index, item in enumerate(self.items):
             item.append_to(self.liststore)
-            print "Preparing work for item", index
-            work.append((lambda it, st, idx: it.update_liststore(st, idx), (item, self.liststore, index)))
-
-        self.loader.push(work)
+            self.loader.push((lambda it, st, idx: it.update_liststore(st, idx), (item, self.liststore, index)))
 
     def on_go_up(self, widget):
         self.curdir = os.path.split(self.curdir)[0]
@@ -271,7 +297,7 @@ class Gallery:
         item.on_selected(self)
         
     def on_item_activated(self, iconview, path):
-        print "on_item_activated", path
+        pass
 
     def on_ok_clicked(self, button):
         self.callback(self.curdir)
@@ -281,11 +307,8 @@ class Gallery:
         self.close()
 
     def close(self):
-        print "Stopping thread..."
         self.loader.stop()
-        print "Joining thread..."
         self.loader.join()
-        print "Destroying window..."
         self.window.destroy()
         
 if __name__ == "__main__":

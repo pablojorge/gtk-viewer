@@ -78,7 +78,7 @@ class DirectorySelectorDialog:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
-class FileSelectorDialog1:
+class FileSelectorDialogGTK:
     def __init__(self, title, initial_dir, initial_filename, callback):
         self.callback = callback
 
@@ -153,12 +153,15 @@ class FileSelectorDialog1:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
-class FileSelectorDialog:
-    def __init__(self, title, initial_dir, initial_filename, callback):
-        self.gallery = Gallery(4, initial_dir, callback)
+class FileSelectorDialogCustom:
+    def __init__(self, title, parent, initial_dir, initial_filename, callback):
+        self.gallery = Gallery(4, title, parent, initial_dir, callback)
 
     def run(self):
         self.gallery.run()
+
+class FileSelectorDialog(FileSelectorDialogCustom):
+    pass
 
 class TargetSelectorDialog(DirectorySelectorDialog):
     def __init__(self, initial_dir, last_targets, callback):
@@ -177,15 +180,17 @@ class BasedirSelectorDialog(DirectorySelectorDialog):
                                          callback)
 
 class OpenDialog(FileSelectorDialog):
-    def __init__(self, initial_dir, callback):
+    def __init__(self, parent, initial_dir, callback):
         FileSelectorDialog.__init__(self, title="Open file", 
+                                          parent=parent,
                                           initial_dir=initial_dir, 
                                           initial_filename=None,
                                           callback=callback)
 
 class RenameDialog(FileSelectorDialog):
-    def __init__(self, initial_filename, callback):
+    def __init__(self, parent, initial_filename, callback):
         FileSelectorDialog.__init__(self, title="Select new name", 
+                                          parent=parent,
                                           initial_dir=None,
                                           initial_filename=initial_filename, 
                                           callback=callback)
