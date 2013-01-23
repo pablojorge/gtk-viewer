@@ -356,6 +356,7 @@ class Pinbar:
 
         if self.is_active():
             DirectorySelectorDialog("Select directory containing categories", 
+                                    self.main_app.window,
                                     self.main_app.get_base_dir(),
                                     [], 
                                     on_dir_selected).run()
@@ -1339,7 +1340,8 @@ class ViewerApp:
             return self.file_manager.get_current_file().get_dirname()
 
     def on_move_to_target(self, _):
-        selector = TargetSelectorDialog(initial_dir=self.get_base_dir(), 
+        selector = TargetSelectorDialog(parent=self.window,
+                                        initial_dir=self.get_base_dir(), 
                                         last_targets=self.last_targets, 
                                         callback=self.on_target_selected)
         selector.run()
@@ -1355,7 +1357,8 @@ class ViewerApp:
         renamer.run()
 
     def on_select_base_dir(self, _):
-        selector = BasedirSelectorDialog(initial_dir=self.get_base_dir(), 
+        selector = BasedirSelectorDialog(parent=self.window,
+                                         initial_dir=self.get_base_dir(), 
                                          last_targets=[], 
                                          callback=self.on_base_dir_selected)
         selector.run()

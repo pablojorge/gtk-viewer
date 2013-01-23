@@ -97,6 +97,8 @@ class DirectoryItem(GalleryItem):
         gallery.curdir = self.item
         gallery.go_up.set_sensitive(True)
         gallery.update_model()
+        gallery.filter_entry.set_text("")
+        gallery.filter_entry.grab_focus()
 
 class Gallery:
     def __init__(self, title, parent, dirname, callback,
@@ -116,8 +118,7 @@ class Gallery:
         self.window.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_DIALOG)
         self.window.set_transient_for(parent)
         
-        # XXX escape q to exit dialog? / Enter default
-        # XXX type to restrict entries (for entry in model remove if not text in str)
+        self.window.connect("key_press_event", self.on_key_press_event)
 
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
@@ -139,14 +140,25 @@ class Gallery:
         toolbar.insert(button, -1)
         self.go_up = button
 
-        # "Location" bar
+        # "Location"/"Filter" bar
         hbox = gtk.HBox(False, 0)
+        vbox.pack_start(hbox, False, False, 0)
+
         label = gtk.Label()
         label.set_text("Location:")
         hbox.pack_start(label, False, False, 0)
+
         self.location_entry = gtk.Entry()
         self.location_entry.connect("activate", self.on_location_entry_activate)
-        vbox.pack_start(hbox, False, False, 0)
+        hbox.pack_start(self.location_entry, True, True, 0)
+
+        self.filter_entry = gtk.Entry()
+        self.filter_entry.connect("activate", self.on_filter_entry_activate)
+        hbox.pack_end(self.filter_entry, False, False, 0)
+
+        label = gtk.Label()
+        label.set_text("Filter:")
+        hbox.pack_end(label, False, False, 0)
 
         # Iconview
         self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
@@ -198,8 +210,9 @@ class Gallery:
         
     def run(self):
         self.window.show_all()
+        self.filter_entry.grab_focus()
     
-    def update_model(self):
+    def update_model(self, filter_=""):
         self.loader.clear()
         self.liststore.clear()
 
@@ -209,6 +222,8 @@ class Gallery:
         scanner = FileScanner()
 
         for directory in scanner.get_dirs_from_dir(self.curdir):
+            if filter_ and not filter_.lower() in directory.lower():
+                continue
             self.items.append(DirectoryItem(directory, self.thumb_size/2))
     
         # Now the files:
@@ -220,8 +235,9 @@ class Gallery:
         file_manager.go_first()
 
         for _ in range(file_manager.get_list_length()):
-            self.items.append(ImageItem(file_manager.get_current_file(), 
-                                        self.thumb_size/2))
+            current_file = file_manager.get_current_file()
+            if not filter_ or filter_.lower() in current_file.get_basename().lower():
+                self.items.append(ImageItem(current_file, self.thumb_size/2))
             file_manager.go_forward(1)
 
         # And now fill the store:
@@ -242,7 +258,22 @@ class Gallery:
     # This is requested to be done by the main thread:
     def update_store_entry(self, index, pixbuf):
         iter_ = self.liststore.get_iter((index,))
+        if not self.liststore.iter_is_valid(iter_):
+            return
         self.liststore.set_value(iter_, 0, pixbuf)
+
+    def on_key_press_event(self, widget, event, data=None):
+        key_name = gtk.gdk.keyval_name(event.keyval)
+        #print "gallery - key pressed:", key_name
+
+        bindings = {
+            "Escape" : self.close,
+            "Up" : lambda: self.on_go_up(None),
+        }
+
+        if key_name in bindings:
+            bindings[key_name]()
+            return True
 
     def on_go_up(self, widget):
         self.curdir = os.path.split(self.curdir)[0]
@@ -262,6 +293,18 @@ class Gallery:
             self.update_model()
         else:
             entry.set_text(self.curdir)
+
+    def on_filter_entry_activate(self, entry):
+        if not entry.get_text():
+            self.callback(self.curdir)
+            self.close()
+
+        # Restrict the entries to those containing the filter:
+        self.update_model(entry.get_text())
+
+        # If only one item matches, simulate it's been selected:
+        if len(self.items) == 1:
+            self.items[0].on_selected(self)
 
     def on_selection_changed(self, iconview):
         selected = iconview.get_selected_items()

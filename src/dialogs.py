@@ -153,6 +153,13 @@ class FileSelectorDialogGTK:
         if response == gtk.RESPONSE_OK:
             self.callback(selection)
 
+class DirectorySelectorDialogCustom:
+    def __init__(self, title, parent, initial_dir, last_targets, callback):
+        self.gallery = Gallery(title, parent, initial_dir, callback)
+
+    def run(self):
+        self.gallery.run()
+
 class FileSelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, initial_filename, callback):
         self.gallery = Gallery(title, parent, initial_dir, callback)
@@ -160,24 +167,29 @@ class FileSelectorDialogCustom:
     def run(self):
         self.gallery.run()
 
+class DirectorySelectorDialog(DirectorySelectorDialogCustom):
+    pass
+
 class FileSelectorDialog(FileSelectorDialogCustom):
     pass
 
 class TargetSelectorDialog(DirectorySelectorDialog):
-    def __init__(self, initial_dir, last_targets, callback):
+    def __init__(self, parent, initial_dir, last_targets, callback):
         DirectorySelectorDialog.__init__(self, 
                                          "Specify target directory",
-                                         initial_dir,
-                                         last_targets,
-                                         callback)
+                                         parent=parent,
+                                         initial_dir=initial_dir,
+                                         last_targets=last_targets,
+                                         callback=callback)
 
 class BasedirSelectorDialog(DirectorySelectorDialog):
-    def __init__(self, initial_dir, last_targets, callback):
+    def __init__(self, parent, initial_dir, last_targets, callback):
         DirectorySelectorDialog.__init__(self, 
                                          "Specify base directory",
-                                         initial_dir,
-                                         last_targets,
-                                         callback)
+                                         parent=parent,
+                                         initial_dir=initial_dir,
+                                         last_targets=last_targets,
+                                         callback=callback)
 
 class OpenDialog(FileSelectorDialog):
     def __init__(self, parent, initial_dir, callback):
@@ -187,7 +199,7 @@ class OpenDialog(FileSelectorDialog):
                                           initial_filename=None,
                                           callback=callback)
 
-class RenameDialog(FileSelectorDialog):
+class RenameDialog(FileSelectorDialogGTK):
     def __init__(self, parent, initial_filename, callback):
         FileSelectorDialog.__init__(self, title="Select new name", 
                                           parent=parent,
