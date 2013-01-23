@@ -1519,6 +1519,5 @@ class ViewerApp:
     ##
 
     def run(self):
-        gobject.threads_init()
         gtk.main()
 

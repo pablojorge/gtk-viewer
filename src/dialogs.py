@@ -155,7 +155,7 @@ class FileSelectorDialogGTK:
 
 class FileSelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, initial_filename, callback):
-        self.gallery = Gallery(4, title, parent, initial_dir, callback)
+        self.gallery = Gallery(title, parent, initial_dir, callback)
 
     def run(self):
         self.gallery.run()
