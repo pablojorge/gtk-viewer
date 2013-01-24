@@ -8,6 +8,8 @@ from giffile import GIFFile
 from pdffile import PDFFile
 from epubfile import EPUBFile
 
+from cache import Cache, cached
+
 class FileFilter:
     STARRED   = "starred"
     UNSTARRED = "unstarred"
@@ -87,6 +89,8 @@ class FileFilter:
                 self.has_allowed_status(file_))
 
 class FileScanner:
+    contents_cache = Cache(shared=True)
+
     def __init__(self, filter_ = None, recursive = False):
         if filter_:
             self.filter_ = filter_
@@ -94,6 +98,7 @@ class FileScanner:
             self.filter_ = FileFilter()
         self.recursive = recursive
 
+    @cached(contents_cache)
     def get_dirs_from_dir(self, directory):
         dirs = []
 
@@ -103,6 +108,7 @@ class FileScanner:
 
         return sorted(dirs)
                 
+    @cached(contents_cache)
     def get_files_from_dir(self, directory):
         files = []
 

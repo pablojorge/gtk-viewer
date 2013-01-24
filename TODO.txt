@@ -15,7 +15,7 @@ Features:
  Gallery:
    + Directory selector mode (auto select dirs with no dirs in it)
    + New folder
-   - Invalidate cache entries when files are moved/dirs created
+   - Invalidate liststore_cache when files are moved/dirs created
  - Extract and apply JPEG image rotation metadata (http://tilloy.net/dev/pyexiv2/, http://www.pythonware.com/products/pil/)
  - Show images metadata
  - Support for copying files

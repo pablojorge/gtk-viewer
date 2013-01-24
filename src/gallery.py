@@ -40,8 +40,7 @@ class ImageItem(GalleryItem):
         return self.item.get_pixbuf_at_size(width, height)
 
     def on_selected(self, gallery):
-        gallery.callback(self.item.get_filename())
-        gallery.close()
+        gallery.on_image_selected(self.item)
 
 class DirectoryItem(GalleryItem):
     def __init__(self, item, size):
@@ -97,11 +96,7 @@ class DirectoryItem(GalleryItem):
         return ret
 
     def on_selected(self, gallery):
-        gallery.curdir = self.item
-        gallery.go_up.set_sensitive(True)
-        gallery.update_model()
-        gallery.filter_entry.set_text("")
-        gallery.filter_entry.grab_focus()
+        gallery.on_dir_selected(self.item)
 
 class Gallery:
     liststore_cache = Cache(shared=True)
@@ -206,6 +201,7 @@ class Gallery:
         self.loader.start()
 
         self.curdir = os.path.realpath(os.path.expanduser(dirname))
+        self.last_filter = ""
         self.items = []
 
         self.update_model()
@@ -246,7 +242,7 @@ class Gallery:
         liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
 
         # Retrieve the items for this dir:
-        items = self.get_items_for_dir(self.curdir, filter_)
+        items = self.get_items_for_dir(directory, filter_)
 
         # And fill the store:
         for index, item in enumerate(items):
@@ -279,8 +275,6 @@ class Gallery:
     # This is requested to be done by the main thread:
     def update_store_entry(self, liststore, index, pixbuf):
         iter_ = liststore.get_iter((index,))
-        if not liststore.iter_is_valid(iter_):
-            return
         liststore.set_value(iter_, 0, pixbuf)
 
     def on_key_press_event(self, widget, event, data=None):
@@ -312,16 +306,19 @@ class Gallery:
         if os.path.isdir(directory):
             self.curdir = directory
             self.update_model()
+            self.filter_entry.grab_focus()
         else:
             entry.set_text(self.curdir)
 
     def on_filter_entry_activate(self, entry):
-        if not entry.get_text():
+        if not entry.get_text() and not self.last_filter:
             self.callback(self.curdir)
             self.close()
+            return
 
         # Restrict the entries to those containing the filter:
         self.update_model(entry.get_text())
+        self.last_filter = entry.get_text()
 
         # If only one item matches, simulate it's been selected:
         if len(self.items) == 1:
@@ -341,6 +338,18 @@ class Gallery:
         
     def on_item_activated(self, iconview, path):
         pass
+
+    def on_image_selected(self, item):
+        self.callback(item.get_filename())
+        self.close()
+
+    def on_dir_selected(self, item):
+        self.curdir = item
+        self.go_up.set_sensitive(True)
+        self.update_model()
+        self.last_filter = ""
+        self.filter_entry.set_text("")
+        self.filter_entry.grab_focus()
 
     def on_ok_clicked(self, button):
         self.callback(self.curdir)
