@@ -7,6 +7,7 @@ from imagefile import GTKIconImage
 from filescanner import FileScanner
 from filemanager import FileManager
 
+from cache import Cache, cached
 from worker import Worker
 
 class GalleryItem:
@@ -33,6 +34,7 @@ class ImageItem(GalleryItem):
                 self.item.get_basename(),
                 self.item.get_filename())
 
+    @cached()
     def final_thumbnail(self):
         width, height = self.item.get_dimensions_to_fit(self.size, self.size)
         return self.item.get_pixbuf_at_size(width, height)
@@ -51,6 +53,7 @@ class DirectoryItem(GalleryItem):
                 os.path.basename(self.item),
                 self.item)
 
+    @cached()
     def final_thumbnail(self):
         dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
 
@@ -101,6 +104,8 @@ class DirectoryItem(GalleryItem):
         gallery.filter_entry.grab_focus()
 
 class Gallery:
+    liststore_cache = Cache(shared=True)
+
     def __init__(self, title, parent, dirname, callback,
                        columns = 4,
                        thumb_size = 256,
@@ -161,24 +166,21 @@ class Gallery:
         hbox.pack_end(label, False, False, 0)
 
         # Iconview
-        self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+        self.iconview = gtk.IconView()
+        self.iconview.set_pixbuf_column(0)
+        self.iconview.set_text_column(1)
+        self.iconview.set_tooltip_column(2)
+        self.iconview.set_selection_mode(gtk.SELECTION_SINGLE)
+        self.iconview.set_item_width(self.thumb_size)
+        self.iconview.set_spacing(thumb_spacing)
+        self.iconview.set_columns(columns)
 
-        iconview = gtk.IconView()
-        iconview.set_model(self.liststore)
-        iconview.set_pixbuf_column(0)
-        iconview.set_text_column(1)
-        iconview.set_tooltip_column(2)
-        iconview.set_selection_mode(gtk.SELECTION_SINGLE)
-        iconview.set_item_width(self.thumb_size)
-        iconview.set_spacing(thumb_spacing)
-        iconview.set_columns(columns)
-
-        iconview.connect("selection-changed", self.on_selection_changed)
-        iconview.connect("item-activated", self.on_item_activated)
+        self.iconview.connect("selection-changed", self.on_selection_changed)
+        self.iconview.connect("item-activated", self.on_item_activated)
 
         scrolled = gtk.ScrolledWindow()
         scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
-        scrolled.add_with_viewport(iconview)
+        scrolled.add_with_viewport(self.iconview)
 
         vbox.pack_start(scrolled, True, True, 0)
 
@@ -212,22 +214,19 @@ class Gallery:
         self.window.show_all()
         self.filter_entry.grab_focus()
     
-    def update_model(self, filter_=""):
-        self.loader.clear()
-        self.liststore.clear()
-
-        self.items = []
+    def get_items_for_dir(self, directory, filter_):
+        items = []
 
         # Obtain the directories first:
         scanner = FileScanner()
 
-        for directory in scanner.get_dirs_from_dir(self.curdir):
-            if filter_ and not filter_.lower() in directory.lower():
+        for dir_ in scanner.get_dirs_from_dir(directory):
+            if filter_ and not filter_.lower() in dir_.lower():
                 continue
-            self.items.append(DirectoryItem(directory, self.thumb_size/2))
+            items.append(DirectoryItem(dir_, self.thumb_size/2))
     
         # Now the files:
-        files = scanner.get_files_from_dir(self.curdir)
+        files = scanner.get_files_from_dir(directory)
         
         file_manager = FileManager(on_list_modified=lambda: None)
         file_manager.set_files(files)
@@ -237,30 +236,52 @@ class Gallery:
         for _ in range(file_manager.get_list_length()):
             current_file = file_manager.get_current_file()
             if not filter_ or filter_.lower() in current_file.get_basename().lower():
-                self.items.append(ImageItem(current_file, self.thumb_size/2))
+                items.append(ImageItem(current_file, self.thumb_size/2))
             file_manager.go_forward(1)
 
-        # And now fill the store:
-        for index, item in enumerate(self.items):
-            # Load the inital data:
-            self.liststore.append(item.initial_data())
-            # And schedule an update on this item:
-            self.loader.push((self.update_item_thumbnail, (index, item)))
+        return items
 
-        # And update the curdir entry widget:
+    @cached(liststore_cache)
+    def build_store(self, directory, filter_):
+        liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+
+        # Retrieve the items for this dir:
+        items = self.get_items_for_dir(self.curdir, filter_)
+
+        # And fill the store:
+        for index, item in enumerate(items):
+            # Load the inital data:
+            liststore.append(item.initial_data())
+
+        return items, liststore
+
+    def update_model(self, filter_=""):
+        self.loader.clear()
+
+        items, liststore = self.build_store(self.curdir, filter_)
+
+        for index, item in enumerate(items):
+            # Schedule an update on this item:
+            self.loader.push((self.update_item_thumbnail, (liststore, index, item)))
+
+        # Update the items list:
+        self.items = items
+        # Associate the new liststore to the iconview:
+        self.iconview.set_model(liststore)
+        # Update the curdir entry widget:
         self.location_entry.set_text(self.curdir)
 
     # This is done in a separate thread:
-    def update_item_thumbnail(self, index, item):
+    def update_item_thumbnail(self, liststore, index, item):
         pixbuf = item.final_thumbnail()
-        return (self.update_store_entry, (index, pixbuf))
+        return (self.update_store_entry, (liststore, index, pixbuf))
 
     # This is requested to be done by the main thread:
-    def update_store_entry(self, index, pixbuf):
-        iter_ = self.liststore.get_iter((index,))
-        if not self.liststore.iter_is_valid(iter_):
+    def update_store_entry(self, liststore, index, pixbuf):
+        iter_ = liststore.get_iter((index,))
+        if not liststore.iter_is_valid(iter_):
             return
-        self.liststore.set_value(iter_, 0, pixbuf)
+        liststore.set_value(iter_, 0, pixbuf)
 
     def on_key_press_event(self, widget, event, data=None):
         key_name = gtk.gdk.keyval_name(event.keyval)

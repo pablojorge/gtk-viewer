@@ -1,9 +1,10 @@
 # Cache implementation
 
 class Cache:
-    def __init__(self, limit=None):
+    def __init__(self, limit=None, shared=False):
         self.keys = []
         self.limit = limit
+        self.shared = shared
         self.store = {}
         self.hits = 0
         self.misses = 0
@@ -43,11 +44,6 @@ class Cache:
 def cached(cache_=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
-            key = (hash(self),
-                   method.__name__,
-                   args,
-                   tuple(kwargs.items()))
-
             if not cache_:
                 if not hasattr(self, "__cache__"):
                     self.__cache__ = Cache()
@@ -55,6 +51,20 @@ def cached(cache_=None):
             else:
                 cache = cache_
     
+            # if the cache is shared, self must NOT be
+            # included in the key (so multiple instances
+            # calling the same method with the same args
+            # share the same result).
+            if cache.shared:
+                key = (method.__name__,
+                       args,
+                       tuple(kwargs.items()))
+            else:
+                key = (hash(self),
+                       method.__name__,
+                       args,
+                       tuple(kwargs.items()))
+
             try:
                 return cache[key]
             except:

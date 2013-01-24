@@ -201,11 +201,10 @@ class OpenDialog(FileSelectorDialog):
 
 class RenameDialog(FileSelectorDialogGTK):
     def __init__(self, parent, initial_filename, callback):
-        FileSelectorDialog.__init__(self, title="Select new name", 
-                                          parent=parent,
-                                          initial_dir=None,
-                                          initial_filename=initial_filename, 
-                                          callback=callback)
+        FileSelectorDialogGTK.__init__(self, title="Select new name", 
+                                             initial_dir=None,
+                                             initial_filename=initial_filename, 
+                                             callback=callback)
 
 class AboutDialog:
     def __init__(self, parent):
