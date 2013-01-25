@@ -4,14 +4,13 @@ import cgi
 
 import gtk
 
-from filefactory import FileFactory
-
 from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
-from dialogs import (OpenDialog, InfoDialog, AboutDialog, FileSelectorDialog, 
+from dialogs import (OpenDialog, InfoDialog, AboutDialog, 
                      BasedirSelectorDialog, TargetSelectorDialog, RenameDialog,
                      DirectorySelectorDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
+from thumbnail import DirectoryThumbnail
 
 from filescanner import FileFilter, FileScanner
 from system import get_process_memory_usage
@@ -343,15 +342,8 @@ class Pinbar:
             self.reset_targets()
 
             for index, dirname in enumerate(dirs):
-                files = scanner.get_files_from_dir(dirname)
-                if files:
-                    file_manager = FileManager(on_list_modified=lambda: None)
-                    file_manager.set_files(files)
-                    file_manager.sort_by_date(True)
-                    file_manager.go_first()
-                    self.set_target(index, file_manager.get_current_file(), dirname)
-                else:
-                    self.set_target(index, GTKIconImage(gtk.STOCK_DIRECTORY, 128), dirname)
+                thumbnail = DirectoryThumbnail(dirname)
+                self.set_target(index, thumbnail, dirname)
 
         if self.is_active():
             DirectorySelectorDialog("Select directory containing categories", 
@@ -359,6 +351,12 @@ class Pinbar:
                                     self.main_app.get_base_dir(),
                                     [], 
                                     on_dir_selected).run()
+
+    def refresh_buckets(self):
+        if self.is_active():
+            for index in range(self.THUMB_COUNT):
+                thumb = self.thumb_array[index]
+                thumb.redraw()
 
     def send_to_target(self, index):
         target = self.target_array[index]
@@ -369,16 +367,15 @@ class Pinbar:
             self.main_app.move_current(target)
 
     def associate_target(self, index):
-        def on_file_selected(selection):
-            imgfile = FileFactory.create(selection)
-            dirname = imgfile.get_dirname()
-            self.set_target(index, imgfile, dirname)
+        def on_dir_selected(selection):
+            thumbnail = DirectoryThumbnail(selection)
+            self.set_target(index, thumbnail, selection)
 
-        FileSelectorDialog("Select target directory for bucket %i" % (index+1), 
-                           self.main_app.window,
-                           self.main_app.get_base_dir(),
-                           None, 
-                           on_file_selected).run()
+        DirectorySelectorDialog("Select target directory for bucket %i" % (index+1), 
+                                self.main_app.window,
+                                self.main_app.get_base_dir(),
+                                [], 
+                                on_dir_selected).run()
 
     def reset_target(self, index):
         self.set_target(index, GTKIconImage(gtk.STOCK_DIALOG_QUESTION, 128), None) 
@@ -1130,6 +1127,9 @@ class ViewerApp:
         # Reset zoom toggle
         self.widget_manager.set_active("zoom_to_fit_toggle", True)
         self.widget_manager.set_active("zoom_to_fit_button", True)
+
+        # Refresh the pinbar buckets
+        self.pinbar.refresh_buckets()
 
         self.fit_viewer(force=True)
         self.refresh_info()
