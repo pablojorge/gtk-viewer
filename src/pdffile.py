@@ -1,5 +1,8 @@
 import os
+import sys
 import glob
+import shutil
+import tempfile
 
 import gtk
 
@@ -14,8 +17,7 @@ class PDFFile(ImageFile):
 
     @cached(pixbuf_cache)
     def get_pixbuf(self):
-        tmp_dir = "/tmp" # XXX tempfile?
-        tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+        tmp_root = os.path.join(tempfile.gettempdir(), "%s" % self.get_basename())
         execute(["pdfimages", "-f", "1", "-l", "1", "-j", 
                  self.get_filename(), 
                  tmp_root])
@@ -32,4 +34,21 @@ class PDFFile(ImageFile):
 
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
         return self.get_empty_pixbuf()
+
+    def embedded_open(self, xid):
+        # Create a temporary dir to hold the PDF images:
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            # Extract the images:
+            tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+            execute(["pdfimages", "-j", self.get_filename(), tmp_root])
+
+            # Run a separate instance of the viewer on this dir:
+            main_py = os.path.join(os.path.dirname(__file__), "main.py")
+            execute([sys.executable, main_py, tmp_dir])
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def can_be_embedded(self):
+        return True
 

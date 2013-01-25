@@ -2,6 +2,7 @@ import os
 import time
 import gtk
 import subprocess
+import tempfile
 
 import datetime
 
@@ -32,8 +33,7 @@ class VideoFile(ImageFile):
     @cached(video_cache)
     def get_pixbuf(self):
         second_cap = int(round(self.get_duration() * 0.2))
-        tmp_dir = "/tmp" # XXX tempfile?
-        tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+        tmp_root = os.path.join(tempfile.gettempdir(), "%s" % self.get_basename())
         tmp_img = "%s-000.jpg" % tmp_root
 
         try:
