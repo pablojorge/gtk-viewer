@@ -99,7 +99,8 @@ class DirectoryItem(GalleryItem):
         gallery.on_dir_selected(self.item)
 
 class Gallery:
-    liststore_cache = Cache(shared=True)
+    liststore_cache = Cache(shared=True, 
+                            top_cache=FileScanner.cache)
 
     def __init__(self, title, parent, dirname, callback,
                        columns = 4,

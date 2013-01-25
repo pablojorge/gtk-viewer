@@ -3,7 +3,6 @@ import signal
 import cgi
 
 import gtk
-import gobject
 
 from filefactory import FileFactory
 

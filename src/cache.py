@@ -1,13 +1,18 @@
 # Cache implementation
 
 class Cache:
-    def __init__(self, limit=None, shared=False):
+    def __init__(self, limit=None, shared=False, debug=False, top_cache=None):
         self.keys = []
         self.limit = limit
         self.shared = shared
+        self.debug = debug
         self.store = {}
         self.hits = 0
         self.misses = 0
+        self.chained = []
+
+        if top_cache:
+            top_cache.add_chained(self)
 
     def __add_key(self, key):
         if self.limit is None:
@@ -41,6 +46,24 @@ class Cache:
             self.misses += 1
             raise
 
+    def add_chained(self, chained):
+        self.chained.append(chained)
+
+    def invalidate(self, partial_key):
+        matches = []
+
+        for key in self.store:
+            if partial_key in key:
+                matches.append(key)
+
+        for key in matches:
+            del self.store[key]
+            if self.keys:
+                self.keys.remove(key)
+
+        for chained in self.chained:
+            chained.invalidate(partial_key)
+
 def cached(cache_=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
@@ -51,19 +74,18 @@ def cached(cache_=None):
             else:
                 cache = cache_
     
+            key = tuple()
+
             # if the cache is shared, self must NOT be
             # included in the key (so multiple instances
             # calling the same method with the same args
             # share the same result).
-            if cache.shared:
-                key = (method.__name__,
-                       args,
-                       tuple(kwargs.items()))
-            else:
-                key = (hash(self),
-                       method.__name__,
-                       args,
-                       tuple(kwargs.items()))
+            if not cache.shared:
+                key += (hash(self),)
+
+            key += (method.__name__,)
+            key += args
+            key += tuple(kwargs.items())
 
             try:
                 return cache[key]

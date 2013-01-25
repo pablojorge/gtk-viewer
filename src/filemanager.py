@@ -2,6 +2,7 @@ import os
 import copy
 
 from filefactory import FileFactory
+from filescanner import FileScanner
 from imagefile import EmptyImage
 
 class Action:
@@ -137,6 +138,9 @@ class FileManager:
                            reverse=reverse)
         self.go_file(filename)
 
+    def on_dir_changed(self, dirname):
+        FileScanner.cache.invalidate(dirname)
+
     @skip_if_empty
     def rename_current(self, new_filename):
         current = self.get_current_file()
@@ -144,21 +148,26 @@ class FileManager:
         orig_dirname = current.get_dirname()
         orig_filename = current.get_filename()
         current.rename(new_filename)
+        self.on_dir_changed(orig_dirname)
 
         if os.path.abspath(orig_dirname) == os.path.abspath(current.get_dirname()):
             self.on_list_modified()
 
             def undo_action():
                 current.rename(orig_filename)
-                self.filelist.go_file(orig_filename)
+                self.on_dir_changed(orig_dirname)
+                self.go_file(orig_filename)
         else:
+            self.on_dir_changed(os.path.dirname(new_filename))
             self.on_current_eliminated()
             
             def undo_action():
+                self.on_dir_changed(os.path.dirname(new_filename))
+                self.on_dir_changed(orig_dirname)
                 restored = FileFactory.create(new_filename)
                 restored.rename(orig_filename)
                 self.filelist.insert(orig_index, restored)
-                self.filelist.go_file(orig_filename)
+                self.go_file(orig_filename)
 
         return Action(Action.NORMAL,
                       "'%s' renamed to '%s'" % (orig_filename, new_filename),
@@ -168,6 +177,7 @@ class FileManager:
     def move_current(self, target_dir, target_name=''):
         current = self.get_current_file()
         orig_index = self.get_current_index()
+        orig_dirname = current.get_dirname()
         orig_filename = current.get_filename()
 
         if not target_name:
@@ -179,11 +189,15 @@ class FileManager:
             return self.handle_duplicate(target_dir, target_name)
 
         current.rename(new_filename)
+        self.on_dir_changed(orig_dirname)
+        self.on_dir_changed(target_dir)
         self.on_current_eliminated()
 
         def undo_action():
             restored = FileFactory.create(new_filename)
             restored.rename(orig_filename)
+            self.on_dir_changed(orig_dirname)
+            self.on_dir_changed(target_dir)
             self.filelist.insert(orig_index, restored)
             self.go_file(orig_filename)
 
@@ -195,14 +209,17 @@ class FileManager:
     def delete_current(self):
         current = self.get_current_file()
         orig_index = self.get_current_index()
+        orig_dirname = current.get_dirname()
         orig_filename = current.get_filename()
 
         current.trash()
+        self.on_dir_changed(orig_dirname)
         self.on_current_eliminated()
 
         def undo_action():
             restored = FileFactory.create(orig_filename)
             restored.untrash()
+            self.on_dir_changed(orig_dirname)
             self.filelist.insert(orig_index, restored)
             self.go_file(orig_filename)
 
@@ -213,13 +230,16 @@ class FileManager:
     @skip_if_empty
     def toggle_star(self):
         current = self.get_current_file()
+        orig_dirname = current.get_dirname()
         orig_filename = current.get_filename()
         prev_status = current.is_starred()
         current.set_starred(not prev_status)
+        self.on_dir_changed(orig_dirname)
         self.on_list_modified()
 
         def undo_action():
             current.set_starred(prev_status)
+            self.on_dir_changed(orig_dirname)
             self.go_file(orig_filename)
 
         return Action(Action.NORMAL,

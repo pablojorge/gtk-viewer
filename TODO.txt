@@ -4,8 +4,8 @@ Bugs:
 
 Enhancements:
  + Asynchronous loading of images
- + Adjust image size when image is rotated
  + Use tempfile to extract thumbnails in pdffile and videofile
+ + Adjust image size when image is rotated
  - Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
  - Support for delete / undelete in Mac OS X
  - Application name and icon
@@ -14,8 +14,6 @@ Features:
  + Embedded mode for PDF files (open in a separate viewer window? tempdir, remove all on exit)
  Gallery:
    + Directory selector mode (auto select dirs with no dirs in it)
-   + New folder
-   - Invalidate liststore_cache when files are moved/dirs created
  - Extract and apply JPEG image rotation metadata (http://tilloy.net/dev/pyexiv2/, http://www.pythonware.com/products/pil/)
  - Show images metadata
  - Support for copying files
