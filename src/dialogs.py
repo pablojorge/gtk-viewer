@@ -13,7 +13,7 @@ from filescanner import FileScanner
 
 from gallery import Gallery
 
-class DirectorySelectorDialog:
+class DirectorySelectorDialogGTK:
     def __init__(self, title, initial_dir, last_targets, callback):
         self.callback = callback
 
@@ -155,7 +155,7 @@ class FileSelectorDialogGTK:
 
 class DirectorySelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, last_targets, callback):
-        self.gallery = Gallery(title, parent, initial_dir, callback)
+        self.gallery = Gallery(title, parent, initial_dir, callback, dir_selector=True)
 
     def run(self):
         self.gallery.run()

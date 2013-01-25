@@ -103,11 +103,13 @@ class Gallery:
                             top_cache=FileScanner.cache)
 
     def __init__(self, title, parent, dirname, callback,
+                       dir_selector = False,
                        columns = 4,
                        thumb_size = 256,
                        thumb_spacing = 15,
                        height = 600):
         self.callback = callback
+        self.dir_selector = dir_selector
         self.thumb_size = thumb_size
 
         self.window = gtk.Window()
@@ -312,7 +314,9 @@ class Gallery:
             entry.set_text(self.curdir)
 
     def on_filter_entry_activate(self, entry):
-        if not entry.get_text() and not self.last_filter:
+        if (not entry.get_text() and 
+            not self.last_filter and 
+            self.dir_selector):
             self.callback(self.curdir)
             self.close()
             return
@@ -345,6 +349,14 @@ class Gallery:
         self.close()
 
     def on_dir_selected(self, item):
+        scanner = FileScanner()
+        dirs = scanner.get_dirs_from_dir(item)
+
+        if self.dir_selector and not dirs:
+            self.callback(item)
+            self.close()
+            return
+
         self.curdir = item
         self.go_up.set_sensitive(True)
         self.update_model()

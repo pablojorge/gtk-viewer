@@ -12,8 +12,6 @@ Enhancements:
 
 Features:
  + Embedded mode for PDF files (open in a separate viewer window? tempdir, remove all on exit)
- Gallery:
-   + Directory selector mode (auto select dirs with no dirs in it)
  - Extract and apply JPEG image rotation metadata (http://tilloy.net/dev/pyexiv2/, http://www.pythonware.com/products/pil/)
  - Show images metadata
  - Support for copying files
