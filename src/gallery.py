@@ -43,6 +43,8 @@ class ImageItem(GalleryItem):
         gallery.on_image_selected(self.item)
 
 class DirectoryItem(GalleryItem):
+    cache = Cache(top_cache=FileScanner.cache)
+
     def __init__(self, item, size):
         GalleryItem.__init__(self, item, size)
 
@@ -52,7 +54,7 @@ class DirectoryItem(GalleryItem):
                 os.path.basename(self.item),
                 self.item)
 
-    @cached()
+    @cached(cache, key_func=lambda self: ("final_thumbnail", self.item))
     def final_thumbnail(self):
         dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
 
@@ -365,6 +367,8 @@ class Gallery:
         self.filter_entry.grab_focus()
 
     def on_ok_clicked(self, button):
+        if not self.dir_selector:
+            return
         self.callback(self.curdir)
         self.close()
         

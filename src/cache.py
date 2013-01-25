@@ -1,4 +1,5 @@
 # Cache implementation
+import time
 
 class Cache:
     def __init__(self, limit=None, shared=False, debug=False, top_cache=None):
@@ -38,7 +39,9 @@ class Cache:
 
     def __getitem__(self, key):
         try:
+            start = time.time()
             value = self.store[key]
+            self.trace(key, "found in the cache")
             self.hits += 1
             self.__refresh_key(key)
             return value
@@ -57,6 +60,7 @@ class Cache:
                 matches.append(key)
 
         for key in matches:
+            self.trace("Invalidating", key)
             del self.store[key]
             if self.keys:
                 self.keys.remove(key)
@@ -64,7 +68,10 @@ class Cache:
         for chained in self.chained:
             chained.invalidate(partial_key)
 
-def cached(cache_=None):
+    def trace(self, *args):
+        if self.debug: print " ".join(map(str,args))
+
+def cached(cache_=None, key_func=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
             if not cache_:
@@ -74,23 +81,29 @@ def cached(cache_=None):
             else:
                 cache = cache_
     
-            key = tuple()
+            if key_func:
+                key = key_func(self)
+            else:
+                key = tuple()
 
-            # if the cache is shared, self must NOT be
-            # included in the key (so multiple instances
-            # calling the same method with the same args
-            # share the same result).
-            if not cache.shared:
-                key += (hash(self),)
+                # if the cache is shared, self must NOT be
+                # included in the key (so multiple instances
+                # calling the same method with the same args
+                # share the same result).
+                if not cache.shared:
+                    key += (hash(self),)
 
-            key += (method.__name__,)
-            key += args
-            key += tuple(kwargs.items())
+                key += (method.__name__,)
+                key += args
+                key += tuple(kwargs.items())
 
             try:
                 return cache[key]
             except:
+                start = time.time()
                 value = method(self, *args, **kwargs)
+                cache.trace(key, "NOT found in the cache, value obtained in", 
+                            time.time() - start, "seconds")
                 cache[key] = value
                 return value
         return wrapper
