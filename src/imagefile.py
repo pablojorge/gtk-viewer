@@ -162,17 +162,21 @@ class ImageFile(File):
                            270: gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE}
     
         pixbuf = self.get_pixbuf()
-        scaled = pixbuf.scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
+        rotated = pixbuf.rotate_simple(angle_constants[self.rotation])
+        scaled = rotated.scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
         flipped = scaled.flip(True) if self.flip_h else scaled
         flipped = flipped.flip(False) if self.flip_v else flipped
-        rotated = flipped.rotate_simple(angle_constants[self.rotation])
 
-        return rotated
+        return flipped
 
-    @cached()
     def get_dimensions(self):
-        return ImageDimensions(self.get_pixbuf().get_width(), 
-                               self.get_pixbuf().get_height())
+        width, height = (self.get_pixbuf().get_width(), 
+                         self.get_pixbuf().get_height())
+
+        if self.rotation in (90, 270):
+            width, height = height, width
+
+        return ImageDimensions(width, height)
 
     def get_dimensions_to_fit(self, width, height):
         dimensions = self.get_dimensions()

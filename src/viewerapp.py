@@ -1508,9 +1508,11 @@ class ViewerApp:
 
     def on_rotate_c(self, _):
         self.image_viewer.rotate_c()
+        self.reload_viewer()
 
     def on_rotate_cc(self, _):
         self.image_viewer.rotate_cc()
+        self.reload_viewer()
 
     def on_flip_horizontal(self, _):
         self.image_viewer.flip_horizontal()

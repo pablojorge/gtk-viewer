@@ -4,7 +4,6 @@ Bugs:
 
 Enhancements:
  + Asynchronous loading of images
- + Adjust image size when image is rotated
  - Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
  - Support for delete / undelete in Mac OS X
  - Application name and icon
