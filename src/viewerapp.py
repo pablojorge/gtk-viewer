@@ -349,7 +349,7 @@ class Pinbar:
             DirectorySelectorDialog("Select directory containing categories", 
                                     self.main_app.window,
                                     self.main_app.get_base_dir(),
-                                    [], 
+                                    self.main_app.last_targets, 
                                     on_dir_selected).run()
 
     def refresh_buckets(self):
@@ -374,7 +374,7 @@ class Pinbar:
         DirectorySelectorDialog("Select target directory for bucket %i" % (index+1), 
                                 self.main_app.window,
                                 self.main_app.get_base_dir(),
-                                [], 
+                                self.main_app.last_targets, 
                                 on_dir_selected).run()
 
     def reset_target(self, index):
@@ -1358,7 +1358,7 @@ class ViewerApp:
     def on_select_base_dir(self, _):
         selector = BasedirSelectorDialog(parent=self.window,
                                          initial_dir=self.get_base_dir(), 
-                                         last_targets=[], 
+                                         last_targets=self.last_targets, 
                                          callback=self.on_base_dir_selected)
         selector.run()
 

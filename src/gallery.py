@@ -2,6 +2,7 @@
 
 import os
 import gtk
+import gobject
 
 from imagefile import GTKIconImage
 from filescanner import FileScanner
@@ -65,19 +66,19 @@ class Gallery:
     liststore_cache = Cache(shared=True, 
                             top_cache=FileScanner.cache)
 
-    def __init__(self, title, parent, dirname, callback,
+    def __init__(self, title, parent, dirname, last_targets, callback,
                        dir_selector = False,
-                       columns = 4,
+                       columns = 3,
                        thumb_size = 256,
-                       thumb_spacing = 15,
-                       height = 600):
+                       quick_thumb_size = 48,
+                       width = 600,
+                       height = 600,
+                       quick_width = 300):
         self.callback = callback
         self.dir_selector = dir_selector
         self.thumb_size = thumb_size
 
         self.window = gtk.Window()
-        self.window.set_size_request(thumb_size * columns + thumb_spacing * columns, 
-                                     height)
         self.window.set_position(gtk.WIN_POS_CENTER)
         self.window.set_resizable(False)
         self.window.set_modal(True)
@@ -86,8 +87,55 @@ class Gallery:
         
         self.window.connect("key_press_event", self.on_key_press_event)
 
-        vbox = gtk.VBox(False, 0)
-        self.window.add(vbox)
+        # Main HBox of the window
+        hbox = gtk.HBox(False, 5)
+        self.window.add(hbox)
+
+        # Left pane (quick access)
+        vbox = gtk.VBox(False, 5)
+        hbox.pack_start(vbox, True, True, 0)
+
+        store = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+
+        home = os.path.realpath(os.path.expanduser("~"))
+        downloads = os.path.join(home, "Downloads")
+        store.append((GTKIconImage(gtk.STOCK_HOME, quick_thumb_size).get_pixbuf(), 
+                      "Home", home))
+        thumb = DirectoryThumbnail(downloads) 
+        store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
+                                               quick_thumb_size), 
+                      "Downloads", downloads))
+
+        for directory in last_targets:
+            thumb = DirectoryThumbnail(directory) 
+            store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
+                                                   quick_thumb_size), 
+                          os.path.basename(directory),
+                          directory))
+
+        treeview = gtk.TreeView(store)
+        treeview.set_rules_hint(True)
+        treeview.set_headers_visible(False)
+        treeview.connect_after("cursor-changed", self.on_cursor_changed)
+
+        renderer = gtk.CellRendererPixbuf()
+        column = gtk.TreeViewColumn("Icon", renderer, pixbuf=0)
+        treeview.append_column(column)
+
+        renderer = gtk.CellRendererText()
+        column = gtk.TreeViewColumn("Path", renderer, text=1)
+        treeview.append_column(column)
+
+        scrolled = gtk.ScrolledWindow()
+        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scrolled.add_with_viewport(treeview)
+        scrolled.set_size_request(quick_width, height)
+
+        vbox.pack_start(scrolled, True, True, 0)
+
+        # Right pane (location, iconview)
+        vbox = gtk.VBox(False, 5)
+        hbox.pack_start(vbox, True, True, 0)
 
         # Toolbar
         toolbar = gtk.Toolbar()
@@ -95,12 +143,8 @@ class Gallery:
 
         vbox.pack_start(toolbar, False, False, 0)
 
-        button = gtk.ToolButton(gtk.STOCK_HOME)
-        button.connect("clicked", self.on_go_home)
-        button.set_is_important(True)
-        toolbar.insert(button, -1)
-
         button = gtk.ToolButton(gtk.STOCK_GO_UP)
+        button.set_label("Go up")
         button.connect("clicked", self.on_go_up)
         button.set_is_important(True)
         toolbar.insert(button, -1)
@@ -113,24 +157,24 @@ class Gallery:
         toolbar.insert(button, -1)
 
         # "Location"/"Filter" bar
-        hbox = gtk.HBox(False, 0)
-        vbox.pack_start(hbox, False, False, 0)
+        location_bar = gtk.HBox(False, 5)
+        vbox.pack_start(location_bar, False, False, 0)
 
         label = gtk.Label()
         label.set_text("Location:")
-        hbox.pack_start(label, False, False, 0)
+        location_bar.pack_start(label, False, False, 0)
 
         self.location_entry = gtk.Entry()
         self.location_entry.connect("activate", self.on_location_entry_activate)
-        hbox.pack_start(self.location_entry, True, True, 0)
+        location_bar.pack_start(self.location_entry, True, True, 0)
 
         self.filter_entry = gtk.Entry()
         self.filter_entry.connect("activate", self.on_filter_entry_activate)
-        hbox.pack_end(self.filter_entry, False, False, 0)
+        location_bar.pack_end(self.filter_entry, False, False, 0)
 
         label = gtk.Label()
         label.set_text("Filter:")
-        hbox.pack_end(label, False, False, 0)
+        location_bar.pack_end(label, False, False, 0)
 
         # Iconview
         self.iconview = gtk.IconView()
@@ -139,15 +183,14 @@ class Gallery:
         self.iconview.set_tooltip_column(2)
         self.iconview.set_selection_mode(gtk.SELECTION_SINGLE)
         self.iconview.set_item_width(self.thumb_size)
-        self.iconview.set_spacing(thumb_spacing)
         self.iconview.set_columns(columns)
 
         self.iconview.connect("selection-changed", self.on_selection_changed)
-        self.iconview.connect("item-activated", self.on_item_activated)
 
         scrolled = gtk.ScrolledWindow()
         scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
         scrolled.add_with_viewport(self.iconview)
+        scrolled.set_size_request(int((thumb_size * 1.06) * columns), height)
 
         vbox.pack_start(scrolled, True, True, 0)
 
@@ -219,7 +262,7 @@ class Gallery:
         items = self.get_items_for_dir(directory, filter_)
 
         # And fill the store:
-        for index, item in enumerate(items):
+        for item in items:
             # Load the inital data:
             liststore.append(item.initial_data())
 
@@ -263,6 +306,14 @@ class Gallery:
         if key_name in bindings:
             bindings[key_name]()
             return True
+
+    def on_cursor_changed(self, treeview):
+        selection = treeview.get_selection()
+        model, iter_ = selection.get_selected()
+
+        if iter_:
+            directory = model.get_value(iter_, 2)
+            self.on_dir_selected(directory)
 
     def on_go_up(self, widget):
         self.on_dir_selected(os.path.split(self.curdir)[0])
@@ -314,9 +365,6 @@ class Gallery:
 
         item.on_selected(self)
         
-    def on_item_activated(self, iconview, path):
-        pass
-
     def on_image_selected(self, item):
         self.callback(item.get_filename())
         self.close()
@@ -349,7 +397,10 @@ class Gallery:
     def close(self):
         self.loader.stop()
         self.loader.join()
-        self.window.destroy()
+        # This is to avoid invoking self.window.destroy() directly, it
+        # was causing a SIGSEGV after the on_cursor_changed handler ran
+        # (https://mail.gnome.org/archives/gtk-app-devel-list/2004-September/msg00230.html)
+        gobject.idle_add(lambda window: window.destroy(), self.window)
         
 class NewFolderDialog:
     def __init__(self, parent, callback):
@@ -361,11 +412,11 @@ class NewFolderDialog:
 
         label = gtk.Label()
         label.set_text("Enter new folder name:")
-        self.window.vbox.pack_start(label, True, True, 5)
+        self.window.action_area.pack_start(label, True, True, 5)
 
         self.entry = gtk.Entry()
         self.entry.connect("activate", self.on_entry_activate)
-        self.window.vbox.pack_start(self.entry, True, True, 5)
+        self.window.action_area.pack_start(self.entry, True, True, 5)
 
     def on_entry_activate(self, entry):
         text = entry.get_text()
