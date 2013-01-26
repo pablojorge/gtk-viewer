@@ -7,17 +7,16 @@ from filemanager import FileManager
 from cache import Cache, cached
 
 class DirectoryThumbnail(ImageFile):
-    cache = Cache(debug=True, top_cache=FileScanner.cache)
+    cache = Cache(top_cache=FileScanner.cache)
+    default_thumbnail_size = 512
+    default_gtk_icon_size = 128
 
-    def __init__(self, directory, size=128):
+    def __init__(self, directory):
         ImageFile.__init__(self, "")
         self.directory = directory
-        self.size = size
 
-    @cached(cache, key_func=lambda self: ("final_thumbnail", self.directory))
+    @cached(cache, key_func=lambda self: ("pixbuf", self.directory))
     def get_pixbuf(self):
-        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
-
         scanner = FileScanner()
         files = scanner.get_files_from_dir(self.directory)
 
@@ -26,13 +25,17 @@ class DirectoryThumbnail(ImageFile):
             file_manager.set_files(files)
             file_manager.sort_by_date(True)
             file_manager.go_first()
-            return self.get_mixed_thumbnail(file_manager.get_current_file())
+            return self.get_mixed_thumbnail(file_manager.get_current_file(), 
+                                            self.default_thumbnail_size)
         else:
+            dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, 
+                                    self.default_gtk_icon_size)
             return dir_icon.get_pixbuf()
 
-    def get_mixed_thumbnail(self, imagefile):
-        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, self.size)
-        ret = dir_icon.get_pixbuf()
+    def get_mixed_thumbnail(self, imagefile, size):
+        dir_icon = GTKIconImage(gtk.STOCK_DIRECTORY, 
+                                self.default_gtk_icon_size)
+        ret = dir_icon.get_pixbuf_at_size(size, size)
 
         # Magic constants needed to fit the embedded thumbnail inside the 
         # directory icon:
@@ -40,8 +43,8 @@ class DirectoryThumbnail(ImageFile):
         dir_height = 0.54
         dir_offset = 0.62
 
-        width, height = imagefile.get_dimensions_to_fit(self.size * dir_width, 
-                                                        self.size * dir_height)
+        width, height = imagefile.get_dimensions_to_fit(size * dir_width, 
+                                                        size * dir_height)
         pixbuf = imagefile.get_pixbuf_at_size(width, height)
 
         offset_x = int((ret.get_width() - pixbuf.get_width()) / 2)

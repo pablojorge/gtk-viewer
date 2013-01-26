@@ -47,16 +47,16 @@ class ImageItem(GalleryItem):
 class DirectoryItem(GalleryItem):
     def __init__(self, item, size):
         GalleryItem.__init__(self, item, size)
-        self.thumbnail = DirectoryThumbnail(item, size)
+        self.thumbnail = DirectoryThumbnail(item)
 
     def initial_data(self):
         unknown_icon = GTKIconImage(gtk.STOCK_MISSING_IMAGE, self.size)
-        return (self.thumbnail.get_mixed_thumbnail(unknown_icon),
+        return (self.thumbnail.get_mixed_thumbnail(unknown_icon, self.size),
                 os.path.basename(self.item),
                 self.item)
 
     def final_thumbnail(self):
-        return self.thumbnail.get_pixbuf()
+        return self.thumbnail.get_pixbuf_at_size(self.size, self.size)
 
     def on_selected(self, gallery):
         gallery.on_dir_selected(self.item)

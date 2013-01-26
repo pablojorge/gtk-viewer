@@ -20,9 +20,8 @@ class Cache:
             return
 
         if len(self.keys) == self.limit:
-            older = self.keys[0]
+            older = self.keys.pop(0)
             del self.store[older]
-            del self.keys[0]
 
         self.keys.append(key)
 
@@ -39,7 +38,6 @@ class Cache:
 
     def __getitem__(self, key):
         try:
-            start = time.time()
             value = self.store[key]
             self.trace(key, "found in the cache")
             self.hits += 1
@@ -74,6 +72,7 @@ class Cache:
 def cached(cache_=None, key_func=None):
     def func(method):
         def wrapper(self, *args, **kwargs):
+            # select the cache:
             if not cache_:
                 if not hasattr(self, "__cache__"):
                     self.__cache__ = Cache()
@@ -81,6 +80,7 @@ def cached(cache_=None, key_func=None):
             else:
                 cache = cache_
     
+            # build the key:
             if key_func:
                 key = key_func(self)
             else:
@@ -97,6 +97,7 @@ def cached(cache_=None, key_func=None):
                 key += args
                 key += tuple(kwargs.items())
 
+            # access/update the cache:
             try:
                 return cache[key]
             except:
