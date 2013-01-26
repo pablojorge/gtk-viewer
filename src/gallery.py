@@ -106,6 +106,12 @@ class Gallery:
         toolbar.insert(button, -1)
         self.go_up = button
 
+        button = gtk.ToolButton(gtk.STOCK_DIRECTORY)
+        button.set_label("New folder")
+        button.connect("clicked", self.on_new_folder)
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
         # "Location"/"Filter" bar
         hbox = gtk.HBox(False, 0)
         vbox.pack_start(hbox, False, False, 0)
@@ -149,10 +155,12 @@ class Gallery:
         buttonbar = gtk.HBox(False, 0)
 
         button = gtk.Button(stock=gtk.STOCK_OK)
+        button.set_relief(gtk.RELIEF_NONE)
         button.connect("clicked", self.on_ok_clicked)
         buttonbar.pack_end(button, False, False, 5)
 
         button = gtk.Button(stock=gtk.STOCK_CANCEL)
+        button.set_relief(gtk.RELIEF_NONE)
         button.connect("clicked", self.on_cancel_clicked)
         buttonbar.pack_end(button, False, False, 0)
 
@@ -257,22 +265,24 @@ class Gallery:
             return True
 
     def on_go_up(self, widget):
-        self.curdir = os.path.split(self.curdir)[0]
-        if self.curdir == "/":
-            self.go_up.set_sensitive(False)
-        self.update_model()
+        self.on_dir_selected(os.path.split(self.curdir)[0])
 
     def on_go_home(self, widget):
-        self.curdir = os.path.realpath(os.path.expanduser('~'))
-        self.go_up.set_sensitive(True)
-        self.update_model()
+        self.on_dir_selected(os.path.realpath(os.path.expanduser('~')))
+
+    def on_new_folder(self, widget):
+        def on_entry(folder):
+            manager = FileManager()
+            manager.create_directory(os.path.join(self.curdir, folder))
+            self.update_model()
+
+        dialog = NewFolderDialog(self.window, on_entry)
+        dialog.run()
 
     def on_location_entry_activate(self, entry):
         directory = entry.get_text()
         if os.path.isdir(directory):
-            self.curdir = directory
-            self.update_model()
-            self.filter_entry.grab_focus()
+            self.on_dir_selected(directory)
         else:
             entry.set_text(self.curdir)
 
@@ -321,7 +331,7 @@ class Gallery:
             return
 
         self.curdir = item
-        self.go_up.set_sensitive(True)
+        self.go_up.set_sensitive(self.curdir != "/")
         self.update_model()
         self.last_filter = ""
         self.filter_entry.set_text("")
@@ -341,3 +351,27 @@ class Gallery:
         self.loader.join()
         self.window.destroy()
         
+class NewFolderDialog:
+    def __init__(self, parent, callback):
+        self.callback = callback
+
+        self.window = gtk.Dialog(title="New folder", 
+                                 parent=parent, 
+                                 flags=gtk.DIALOG_MODAL)
+
+        label = gtk.Label()
+        label.set_text("Enter new folder name:")
+        self.window.vbox.pack_start(label, True, True, 5)
+
+        self.entry = gtk.Entry()
+        self.entry.connect("activate", self.on_entry_activate)
+        self.window.vbox.pack_start(self.entry, True, True, 5)
+
+    def on_entry_activate(self, entry):
+        text = entry.get_text()
+        if text:
+            gtk.Widget.destroy(self.window)
+            self.callback(text)
+
+    def run(self):
+        self.window.show_all()

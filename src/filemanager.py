@@ -69,7 +69,7 @@ class FileList:
         self.actual = filter(filter_.allowed, self.files)
 
 class FileManager:
-    def __init__(self, on_list_modified):
+    def __init__(self, on_list_modified=lambda: None):
         self.filelist = FileList()
         self.index = 0
 
@@ -140,6 +140,10 @@ class FileManager:
 
     def on_dir_changed(self, dirname):
         FileScanner.cache.invalidate(dirname)
+
+    def create_directory(self, directory):
+        self.on_dir_changed(os.path.split(directory)[0])
+        os.mkdir(directory)
 
     @skip_if_empty
     def rename_current(self, new_filename):
