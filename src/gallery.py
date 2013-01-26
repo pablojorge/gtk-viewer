@@ -97,14 +97,24 @@ class Gallery:
 
         store = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
 
+        store.append((GTKIconImage(gtk.STOCK_HARDDISK, quick_thumb_size).get_pixbuf(), 
+                      "File System", "/"))
+
         home = os.path.realpath(os.path.expanduser("~"))
-        downloads = os.path.join(home, "Downloads")
         store.append((GTKIconImage(gtk.STOCK_HOME, quick_thumb_size).get_pixbuf(), 
                       "Home", home))
+
+        downloads = os.path.join(home, "Downloads")
         thumb = DirectoryThumbnail(downloads) 
         store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
                                                quick_thumb_size), 
                       "Downloads", downloads))
+
+        pictures = os.path.join(home, "Pictures")
+        thumb = DirectoryThumbnail(pictures) 
+        store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
+                                               quick_thumb_size), 
+                      "Pictures", pictures))
 
         for directory in last_targets:
             thumb = DirectoryThumbnail(directory) 
@@ -114,7 +124,6 @@ class Gallery:
                           directory))
 
         treeview = gtk.TreeView(store)
-        treeview.set_rules_hint(True)
         treeview.set_headers_visible(False)
         treeview.connect_after("cursor-changed", self.on_cursor_changed)
 

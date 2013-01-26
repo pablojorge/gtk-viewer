@@ -163,7 +163,7 @@ class DirectorySelectorDialogCustom:
 
 class FileSelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, initial_filename, callback):
-        self.gallery = Gallery(title, parent, initial_dir, last_targets, callback)
+        self.gallery = Gallery(title, parent, initial_dir, [], callback)
 
     def run(self):
         self.gallery.run()
