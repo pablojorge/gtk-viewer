@@ -2,7 +2,7 @@ A: toggle toolbar
 B: select base dir
 C: show status bar
 D: sort by date
-E: embedded viewer
+E: extract contents
 F: flip horizontal
 C-F: flip vertical
 G: gif animation on/off

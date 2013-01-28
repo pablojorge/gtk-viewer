@@ -18,13 +18,11 @@ On the top of the window there's a menubar, a toolbar with the most common opera
 
 ### Special files
 
-Video files are previewed selecting a frame located at approximately 20% of the duration of the video. GIF files are first previewed showing only the first frame. PDF files are previewed extracting the image of the first page, and EPUB files are previewed by extracting the cover image.
-
-### Embedded preview
+Video files are previewed selecting a frame located at approximately 20% of the duration of the video. GIF files are first previewed showing only the first frame. PDF files are previewed extracting the image of the first page, and EPUB files are previewed by extracting the cover image. For PDFs, the first image is extracted and its assumed to be the front cover of a magazine or e-Book.
 
 By pressing the 'G' key, if the current file is an animated GIF file, animation will start. That setting is persistent, so if you switch to another GIF file it will also be animated, until animation is toggled off again. 
 
-For video files, pressing the 'E' key will embed a video player in the main window, but it's not permanent, so if you switch to a new video, the embedded player will be killed and will have to be started again with the 'E' key.
+The contents from video and PDF files can be extracted pressing the 'E' key. A separate window will be opened with all the extracted frames (1 per second) in the case of video files, or all the extracted images from a PDF (pages in a magazine or e-Book).
 
 ## Moving files
 
@@ -77,7 +75,7 @@ It supports previewing the following kind of files:
 
 * __Navigation__
  * __Open with external viewer__ (X)
- * __Enable/disable embedded preview__ (E)
+ * __Extract contents__ (E)
  * __Enable/disable GIF animation__ (E)
  * __Sort by date__ (D)
  * __Sort by name__ (N)

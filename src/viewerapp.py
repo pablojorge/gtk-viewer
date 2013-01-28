@@ -463,7 +463,6 @@ class ViewerApp:
                                     self.on_undo_stack_empty)
         self.filter_ = FileFilter()
 
-        self.embedded_app = None
         self.fullview_active = False
 
         ### Window composition
@@ -593,10 +592,10 @@ class ViewerApp:
                             {"text" : "Open in external viewer",
                              "accel" : "X",
                              "handler" : self.on_external_open},
-                            {"text" : "Open in embedded viewer",
+                            {"text" : "Extract contents",
                              "accel" : "E",
-                             "key" : "embedded_mitem",
-                             "handler" : self.on_embedded_open},
+                             "key" : "extract_mitem",
+                             "handler" : self.on_extract_contents},
                             {"toggle" : "Enable animation",
                              "accel" : "G",
                              "key" : "animation_toggle",
@@ -836,9 +835,9 @@ class ViewerApp:
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_CONVERT)
-        handler_id = button.connect("clicked", self.on_embedded_open)
-        button.set_tooltip(tooltips, "Embedded open")
-        widget_manager.add_widget("embedded_button", button, handler_id)
+        handler_id = button.connect("clicked", self.on_extract_contents)
+        button.set_tooltip(tooltips, "Extract contents")
+        widget_manager.add_widget("extract_button", button, handler_id)
         toolbar.insert(button, -1)
 
         button = gtk.ToggleToolButton(gtk.STOCK_MEDIA_PLAY)
@@ -1090,16 +1089,7 @@ class ViewerApp:
 
         self.undo_stack.push(self.file_manager.move_current(target_dir))
 
-    def stop_embedded_app(self):
-        if self.embedded_app:
-            os.kill(self.embedded_app, signal.SIGTERM)
-            self.embedded_app = None
-            self.window.queue_draw() # force to window to fully redraw
-
-    def reload_viewer(self, force_stop=True):
-        if force_stop:
-            self.stop_embedded_app()
-
+    def reload_viewer(self):
         current_file = self.file_manager.get_current_file()
         anim_enabled = self.widget_manager.get("animation_toggle").get_active()
         current_file.set_anim_enabled(anim_enabled)
@@ -1116,9 +1106,9 @@ class ViewerApp:
         self.th_left.load(self.file_manager.get_prev_file())
         self.th_right.load(self.file_manager.get_next_file())
 
-        # Handle embedded buttons
-        self.widget_manager.get("embedded_mitem").set_sensitive(current_file.can_be_embedded())
-        self.widget_manager.get("embedded_button").set_sensitive(current_file.can_be_embedded())
+        # Handle extract buttons
+        self.widget_manager.get("extract_mitem").set_sensitive(current_file.can_be_extracted())
+        self.widget_manager.get("extract_button").set_sensitive(current_file.can_be_extracted())
 
         # Handle reuse checkbox and button
         self.widget_manager.get("reuse_mitem").set_sensitive(bool(self.last_targets))
@@ -1213,7 +1203,6 @@ class ViewerApp:
             assert(False)
 
     def quit_app(self):
-        self.stop_embedded_app()
         gtk.Widget.destroy(self.window)
     ##
 
@@ -1470,18 +1459,15 @@ class ViewerApp:
         current_file = self.file_manager.get_current_file()
         current_file.external_open()
 
-    def on_embedded_open(self, _):
+    def on_extract_contents(self, _):
         current_file = self.file_manager.get_current_file()
-        if self.embedded_app:
-            self.reload_viewer(force_stop=True)
-        else:
-            self.embedded_app = current_file.embedded_open(self.window.get_window().xid)
-            self.reload_viewer(force_stop=False)
+        current_file.extract_contents()
+        self.reload_viewer()
 
     def on_enable_animation(self, toggle):
         self.widget_manager.set_active("animation_toggle", toggle.get_active())
         self.widget_manager.set_active("animation_button", toggle.get_active())
-        self.reload_viewer(force_stop=False)
+        self.reload_viewer()
 
     def on_toggle_zoom(self, toggle):
         if toggle.get_active():

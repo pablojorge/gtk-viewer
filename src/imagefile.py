@@ -115,13 +115,13 @@ class File:
         self.rename(os.path.join(self.get_dirname(), 
                                  string.join((new_name, ext), sep)))
 
-    def embedded_open(self, xid):
+    def extract_contents(self):
         pass
 
     def set_anim_enabled(self, enable):
         pass
 
-    def can_be_embedded(self):
+    def can_be_extracted(self):
         return False
 
 class ImageFile(File):

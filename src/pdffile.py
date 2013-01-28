@@ -35,7 +35,7 @@ class PDFFile(ImageFile):
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
         return self.get_empty_pixbuf()
 
-    def embedded_open(self, xid):
+    def extract_contents(self):
         # Create a temporary dir to hold the PDF images:
         tmp_dir = tempfile.mkdtemp()
         try:
@@ -49,6 +49,6 @@ class PDFFile(ImageFile):
         finally:
             shutil.rmtree(tmp_dir)
 
-    def can_be_embedded(self):
+    def can_be_extracted(self):
         return True
 

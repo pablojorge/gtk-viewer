@@ -1,6 +1,8 @@
 import os
+import sys
 import time
 import gtk
+import shutil
 import subprocess
 import tempfile
 
@@ -37,11 +39,7 @@ class VideoFile(ImageFile):
         tmp_img = "%s-000.jpg" % tmp_root
 
         try:
-            execute(["ffmpeg", "-ss", str(second_cap), 
-                     "-i", self.get_filename(), 
-                     "-vframes", "1",
-                     "-an",
-                     tmp_img])
+            self.extract_frame_at(second_cap, tmp_img)
         except:
             print "Warning: unable to extract thumbnail from '%s'" % self.get_basename()
             return self.get_empty_pixbuf()
@@ -54,16 +52,34 @@ class VideoFile(ImageFile):
             print "Warning: unable to open", tmp_img
             return self.get_empty_pixbuf()
 
+    def extract_frame_at(self, second, output):
+        execute(["ffmpeg", "-ss", str(second), 
+                 "-i", self.get_filename(), 
+                 "-vframes", "1",
+                 "-an",
+                 output])
+
     def get_sha1(self):
         # avoiding this for video files
-        return "Duration: %s" % datetime.timedelta(seconds=self.get_duration())
+        return "Duration: %s (%d seconds)" % (datetime.timedelta(seconds=self.get_duration()),
+                                              self.get_duration())
 
-    def embedded_open(self, xid):
-        popen = subprocess.Popen(["mplayer", self.filename, "-wid", str(xid)],
-                                 stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
-        return popen.pid
+    def extract_contents(self):
+        # Create a temporary dir to hold the screen captures:
+        tmp_dir = tempfile.mkdtemp()
+        try:
+            # Extract the images:
+            tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+            for second in range(self.get_duration()):
+                tmp_img = "%s-%06d.jpg" % (tmp_root, second)
+                self.extract_frame_at(second, tmp_img)
 
-    def can_be_embedded(self):
+            # Run a separate instance of the viewer on this dir:
+            main_py = os.path.join(os.path.dirname(__file__), "main.py")
+            execute([sys.executable, main_py, tmp_dir])
+        finally:
+            shutil.rmtree(tmp_dir)
+
+    def can_be_extracted(self):
         return True
 
