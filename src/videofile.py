@@ -4,6 +4,7 @@ import gtk
 import tempfile
 
 import datetime
+import pexpect
 
 from imagefile import ImageFile
 from cache import Cache, cached
@@ -61,15 +62,35 @@ class VideoFile(ImageFile):
         return "Duration: %s (%d seconds)" % (datetime.timedelta(seconds=self.get_duration()),
                                               self.get_duration())
 
-    def extract_contents(self, tmp_dir):
+    def extract_frames(self, offset, rate, count, tmp_dir):
+        pattern = os.path.join(tmp_dir, "%s-%%06d.jpg" % self.get_basename())
+
         try:
-            tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
-            for second in range(self.get_duration()):
-                tmp_img = "%s-%06d.jpg" % (tmp_root, second)
-                self.extract_frame_at(second, tmp_img)
-                yield float(second) / self.get_duration()
-        except:
+            child = pexpect.spawn("ffmpeg", ["-ss", str(offset), 
+                                             "-i", self.get_filename(), 
+                                             "-r", str(rate), 
+                                             "-qscale", "1", 
+                                             "-vframes", str(count),
+                                             pattern])
+            first = True
+            while True:
+                child.expect("frame=")
+                if not first:
+                    tokens = filter(lambda x:x, child.before.split(" "))
+                    frame = str(tokens[0])
+                    yield float(frame) / (self.get_duration() * rate)
+                else:
+                    first = False
+        except pexpect.EOF:
             pass
+        except Exception, e:
+            print "Warning:", e
+
+    def extract_contents(self, tmp_dir):
+        return self.extract_frames(offset=0,
+                                   rate=1,
+                                   count=self.get_duration(),
+                                   tmp_dir=tmp_dir)
 
     def can_be_extracted(self):
         return True
