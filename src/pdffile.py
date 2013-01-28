@@ -1,7 +1,5 @@
 import os
-import sys
 import glob
-import shutil
 import tempfile
 
 import gtk
@@ -35,19 +33,13 @@ class PDFFile(ImageFile):
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
         return self.get_empty_pixbuf()
 
-    def extract_contents(self):
-        # Create a temporary dir to hold the PDF images:
-        tmp_dir = tempfile.mkdtemp()
+    def extract_contents(self, tmp_dir):
         try:
-            # Extract the images:
             tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
+            yield None
             execute(["pdfimages", "-j", self.get_filename(), tmp_root])
-
-            # Run a separate instance of the viewer on this dir:
-            main_py = os.path.join(os.path.dirname(__file__), "main.py")
-            execute([sys.executable, main_py, tmp_dir])
-        finally:
-            shutil.rmtree(tmp_dir)
+        except:
+            pass
 
     def can_be_extracted(self):
         return True

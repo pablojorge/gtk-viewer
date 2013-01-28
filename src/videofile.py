@@ -1,9 +1,6 @@
 import os
-import sys
 import time
 import gtk
-import shutil
-import subprocess
 import tempfile
 
 import datetime
@@ -64,21 +61,15 @@ class VideoFile(ImageFile):
         return "Duration: %s (%d seconds)" % (datetime.timedelta(seconds=self.get_duration()),
                                               self.get_duration())
 
-    def extract_contents(self):
-        # Create a temporary dir to hold the screen captures:
-        tmp_dir = tempfile.mkdtemp()
+    def extract_contents(self, tmp_dir):
         try:
-            # Extract the images:
             tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
             for second in range(self.get_duration()):
                 tmp_img = "%s-%06d.jpg" % (tmp_root, second)
                 self.extract_frame_at(second, tmp_img)
-
-            # Run a separate instance of the viewer on this dir:
-            main_py = os.path.join(os.path.dirname(__file__), "main.py")
-            execute([sys.executable, main_py, tmp_dir])
-        finally:
-            shutil.rmtree(tmp_dir)
+                yield float(second) / self.get_duration()
+        except:
+            pass
 
     def can_be_extracted(self):
         return True

@@ -11,7 +11,7 @@ from filemanager import FileManager
 from thumbnail import DirectoryThumbnail
 
 from cache import Cache, cached
-from worker import Worker
+from threads import Worker
 
 class GalleryItem:
     def __init__(self, item, size):

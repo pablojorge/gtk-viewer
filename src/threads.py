@@ -55,3 +55,21 @@ class Worker(Thread):
             self.queue.append(job)
             self.cond.notify_all()
 
+class Updater(Thread):
+    def __init__(self, generator, on_progress, on_finish, on_finish_args):
+        Thread.__init__(self)
+        self.generator = generator
+        self.on_progress = on_progress
+        self.on_finish = on_finish
+        self.on_finish_args = on_finish_args
+
+    def run(self):
+        try:
+            for progress in self.generator:
+                gobject.idle_add(self.on_progress, progress)
+        except Exception, e:
+            print "Warning", e
+
+        self.on_finish(*self.on_finish_args)
+        gobject.idle_add(lambda t: t.join(), self)
+

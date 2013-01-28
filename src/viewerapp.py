@@ -1,19 +1,23 @@
 import os
-import signal
+import sys
+import tempfile
+import shutil
 import cgi
 
 import gtk
 
 from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
-from dialogs import (OpenDialog, InfoDialog, AboutDialog, 
-                     BasedirSelectorDialog, TargetSelectorDialog, RenameDialog,
-                     DirectorySelectorDialog)
+from dialogs import (OpenDialog, InfoDialog, AboutDialog, BasedirSelectorDialog, 
+                     TargetSelectorDialog, RenameDialog, DirectorySelectorDialog,
+                     ProgressBarDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 
 from filescanner import FileFilter, FileScanner
-from system import get_process_memory_usage
+from system import get_process_memory_usage, execute
+
+from threads import Updater
 
 class BlockedWidget:
     def __init__(self, widget, handler_id):
@@ -1461,8 +1465,24 @@ class ViewerApp:
 
     def on_extract_contents(self, _):
         current_file = self.file_manager.get_current_file()
-        current_file.extract_contents()
-        self.reload_viewer()
+        # Create a temporary dir to hold the contents:
+        tmp_dir = tempfile.mkdtemp(suffix="gtk-viewer")
+        dialog = ProgressBarDialog(self.window, "Extracting contents...")
+        dialog.show()
+        updater = Updater(current_file.extract_contents(tmp_dir),
+                          dialog.update,
+                          self.on_extraction_finished,
+                          (tmp_dir, dialog))
+        updater.start()
+
+    def on_extraction_finished(self, tmp_dir, dialog):
+        try:
+            dialog.destroy()
+            # Run a separate instance of the viewer on this dir:
+            main_py = os.path.join(os.path.dirname(__file__), "main.py")
+            execute([sys.executable, main_py, tmp_dir])
+        finally:
+            shutil.rmtree(tmp_dir)
 
     def on_enable_animation(self, toggle):
         self.widget_manager.set_active("animation_toggle", toggle.get_active())

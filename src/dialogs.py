@@ -1,4 +1,6 @@
 import os
+import time
+import datetime
 import gtk
 
 from filemanager import FileManager
@@ -255,4 +257,44 @@ class QuestionDialog:
         response = self.md.run()
         self.md.destroy()
         return response == gtk.RESPONSE_YES
+
+class ProgressBarDialog:
+    def __init__(self, parent, text):
+        self.window = gtk.Dialog(title="Progress", 
+                                 parent=parent, 
+                                 flags=gtk.DIALOG_MODAL)
+
+        label = gtk.Label()
+        label.set_text(text)
+        self.window.action_area.pack_start(label, True, True, 5)
+
+        self.progressbar = gtk.ProgressBar()
+        self.window.action_area.pack_start(self.progressbar, True, True, 5)
+
+        self.start = None
+
+    def show(self):
+        self.window.show_all()
+
+    def destroy(self):
+        self.window.destroy()
+
+    def update(self, fraction):
+        if self.start is None:
+            self.start = time.time()
+
+        if fraction is None:
+            self.progressbar.set_text("")
+            self.progressbar.pulse()
+            return
+            
+        rate = fraction / (time.time() - self.start)
+
+        if rate:
+            remaining = datetime.timedelta(seconds=int(round((1-fraction) / rate)))
+        else:
+            remaining = "Unknown"
+
+        self.progressbar.set_text("%d%% (%s left)" % (fraction*100, remaining))
+        self.progressbar.set_fraction(fraction)
 
