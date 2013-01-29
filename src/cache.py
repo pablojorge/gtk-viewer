@@ -1,12 +1,16 @@
 # Cache implementation
 import time
 
+from threading import Lock
+
 class Cache:
     def __init__(self, limit=None, shared=False, debug=False, top_cache=None):
-        self.keys = []
         self.limit = limit
         self.shared = shared
         self.debug = debug
+
+        self.keys = []
+        self.lock = Lock()
         self.store = {}
         self.hits = 0
         self.misses = 0
@@ -33,19 +37,33 @@ class Cache:
         self.keys.append(key)
 
     def __setitem__(self, key, value):
-        self.__add_key(key)
-        self.store[key] = value
+        with self.lock:
+            # This can happen in a race between two threads that couldn't
+            # get an item from the cache, and then invoke the original method
+            # and try to update the cache using the same key. The cache is locked
+            # during the get() and set() operations to mantain the consistency,
+            # but it's not locked during the whole check-fail-generate-store cycle
+            # since that would generate a big bottle neck and would prevent two
+            # different threads from checking, generating and storing different items.
+            # To avoid working in the same item in parallel, additional locking in 
+            # the object is necessary
+            if key in self.store:
+                print "Warning, duplicate entry for", key
+                return
+            self.__add_key(key)
+            self.store[key] = value
 
     def __getitem__(self, key):
-        try:
-            value = self.store[key]
-            self.trace(key, "found in the cache")
-            self.hits += 1
-            self.__refresh_key(key)
-            return value
-        except:
-            self.misses += 1
-            raise
+        with self.lock:
+            try:
+                value = self.store[key]
+                self.trace(key, "found in the cache")
+                self.hits += 1
+                self.__refresh_key(key)
+                return value
+            except:
+                self.misses += 1
+                raise
 
     def add_chained(self, chained):
         self.chained.append(chained)
@@ -53,15 +71,16 @@ class Cache:
     def invalidate(self, partial_key):
         matches = []
 
-        for key in self.store:
-            if partial_key in key:
-                matches.append(key)
+        with self.lock:
+            for key in self.store:
+                if partial_key in key:
+                    matches.append(key)
 
-        for key in matches:
-            self.trace("Invalidating", key)
-            del self.store[key]
-            if self.keys:
-                self.keys.remove(key)
+            for key in matches:
+                self.trace("Invalidating", key)
+                del self.store[key]
+                if self.keys:
+                    self.keys.remove(key)
 
         for chained in self.chained:
             chained.invalidate(partial_key)
@@ -97,7 +116,8 @@ def cached(cache_=None, key_func=None):
                 key += args
                 key += tuple(kwargs.items())
 
-            # access/update the cache:
+            # access/update the cache: 
+            # (this is NOT locked -see cache.__setitem__-)
             try:
                 return cache[key]
             except:

@@ -17,7 +17,7 @@ from thumbnail import DirectoryThumbnail
 from filescanner import FileFilter, FileScanner
 from system import get_process_memory_usage, execute
 
-from threads import Updater
+from threads import Worker, Updater
 
 class BlockedWidget:
     def __init__(self, widget, handler_id):
@@ -566,6 +566,17 @@ class ViewerApp:
 
         # Window composition end
 
+        # Loaders pool:
+        self.pool = []
+        self.loader_left = Worker()
+        self.loader_right = Worker()
+        self.pool.append(self.loader_left)
+        self.pool.append(self.loader_right)
+
+        for worker in self.pool:
+            worker.start()
+
+        # Initial set of files:
         self.set_files(files, start_file)
 
         # Show main window AFTER obtaining file list
@@ -1000,6 +1011,9 @@ class ViewerApp:
 
     ## Gtk event handlers
     def on_destroy(self, widget):
+        for worker in self.pool:
+            worker.stop()
+            worker.join()
         gtk.main_quit()
 
     def on_key_press_event(self, widget, event, data=None):
@@ -1107,8 +1121,15 @@ class ViewerApp:
 
         # Update main viewer and thumbnails
         self.image_viewer.load(current_file)
-        self.th_left.load(self.file_manager.get_prev_file())
-        self.th_right.load(self.file_manager.get_next_file())
+        missing_image = GTKIconImage(gtk.STOCK_MISSING_IMAGE, 128)
+        self.th_left.load(missing_image)
+        self.th_right.load(missing_image)
+        self.loader_left.clear()
+        self.loader_left.push((self.prepare_thumbnail, 
+                              (self.th_left, self.file_manager.get_prev_file())))
+        self.loader_right.clear()
+        self.loader_right.push((self.prepare_thumbnail, 
+                               (self.th_right, self.file_manager.get_next_file())))
 
         # Handle extract buttons
         self.widget_manager.get("extract_mitem").set_sensitive(current_file.can_be_extracted())
@@ -1127,6 +1148,10 @@ class ViewerApp:
 
         self.fit_viewer(force=True)
         self.refresh_info()
+
+    def prepare_thumbnail(self, thumb, file_):
+        file_.get_pixbuf() # it will be obtained and cached
+        return (thumb.load, (file_,))
 
     def fit_viewer(self, force=False):
         allocation = self.scrolled.get_widget().allocation

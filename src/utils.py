@@ -12,6 +12,26 @@ def trace(prefix):
         return wrapper
     return decorator
 
+def contract(pre, post):
+    def func(method):
+        def wrapper(self, *args, **kwargs):
+            if not pre(self):
+                raise Exception("Pre-condition not met")
+            ret = method(self, *args, **kwargs)
+            if not post(self):
+                raise Exception("Post-condition not met")
+            return ret
+        return wrapper
+    return func
+
+def locked(lock_func):
+    def func(method):
+        def wrapper(self, *args, **kwargs):
+            with lock_func(self):
+                return method(self, *args, **kwargs)
+        return wrapper
+    return func
+
 class Timer:
     def __init__(self, key):
         self.key = key

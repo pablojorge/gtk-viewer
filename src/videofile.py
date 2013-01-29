@@ -9,11 +9,18 @@ import pexpect
 from imagefile import ImageFile
 from cache import Cache, cached
 from system import execute
+from utils import locked
+
+from threading import Lock
 
 class VideoFile(ImageFile):
     description = "video"
     valid_extensions = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
     video_cache = Cache(10)
+
+    def __init__(self, filename):
+        ImageFile.__init__(self, filename)
+        self.lock = Lock()
 
     @cached()
     def get_duration(self):
@@ -30,6 +37,7 @@ class VideoFile(ImageFile):
 
         return 0
 
+    @locked(lambda self: self.lock)
     @cached(video_cache)
     def get_pixbuf(self):
         second_cap = int(round(self.get_duration() * 0.2))
