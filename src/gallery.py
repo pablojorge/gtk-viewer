@@ -9,9 +9,10 @@ from filescanner import FileScanner
 from filemanager import FileManager
 
 from thumbnail import DirectoryThumbnail
+from dialogs import NewFolderDialog, ProgressBarDialog
 
 from cache import Cache, cached
-from threads import Worker
+from threads import Worker, Updater
 
 class GalleryItem:
     def __init__(self, item, size):
@@ -62,10 +63,67 @@ class DirectoryItem(GalleryItem):
     def on_selected(self, gallery):
         gallery.on_dir_selected(self.item)
 
-class Gallery:
+class ListStoreBuilder:
     liststore_cache = Cache(shared=True, 
                             top_cache=FileScanner.cache)
 
+    def __init__(self, directory, filter_, thumb_size):
+        self.directory = directory
+        self.filter_ = filter_
+        self.thumb_size = thumb_size
+
+        self.items = []
+        self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+
+    def get_items_from_dir(self):
+        # Obtain the directories first:
+        scanner = FileScanner()
+
+        for dir_ in scanner.get_dirs_from_dir(self.directory):
+            if self.filter_ and not self.filter_.lower() in dir_.lower():
+                continue
+            yield DirectoryItem(dir_, self.thumb_size/2)
+    
+        # Now the files:
+        files = scanner.get_files_from_dir(self.directory)
+        
+        file_manager = FileManager()
+        file_manager.set_files(files)
+        file_manager.sort_by_date(True)
+        file_manager.go_first()
+
+        for _ in range(file_manager.get_list_length()):
+            current_file = file_manager.get_current_file()
+            if not self.filter_ or self.filter_.lower() in current_file.get_basename().lower():
+                yield ImageItem(current_file, self.thumb_size/2)
+            file_manager.go_forward(1)
+
+    def build(self):
+        key = (self.directory, self.filter_)
+
+        # Try to (manually) get the values from the cache:
+        try:
+            self.items, self.liststore = self.liststore_cache[key]
+            return
+        except KeyError:
+            pass
+
+        # Retrieve the items for this dir:
+        for item in self.get_items_from_dir():
+            self.items.append(item)
+            yield None # to pulse the progressbar
+
+        # And fill the store:
+        total = len(self.items)
+        for index, item in enumerate(self.items):
+            # Load the inital data:
+            self.liststore.append(item.initial_data())
+            yield float(index) / total
+
+        # Update the cache with the generated lists:
+        self.liststore_cache[key] = self.items, self.liststore
+
+class Gallery:
     def __init__(self, title, parent, dirname, last_targets, callback,
                        dir_selector = False,
                        columns = 3,
@@ -229,67 +287,36 @@ class Gallery:
         self.curdir = os.path.realpath(os.path.expanduser(dirname))
         self.last_filter = ""
         self.items = []
-
-        self.update_model()
         
     def run(self):
         self.window.show_all()
         self.filter_entry.grab_focus()
+        self.update_model()
     
-    def get_items_for_dir(self, directory, filter_):
-        items = []
-
-        # Obtain the directories first:
-        scanner = FileScanner()
-
-        for dir_ in scanner.get_dirs_from_dir(directory):
-            if filter_ and not filter_.lower() in dir_.lower():
-                continue
-            items.append(DirectoryItem(dir_, self.thumb_size/2))
-    
-        # Now the files:
-        files = scanner.get_files_from_dir(directory)
-        
-        file_manager = FileManager(on_list_modified=lambda: None)
-        file_manager.set_files(files)
-        file_manager.sort_by_date(True)
-        file_manager.go_first()
-
-        for _ in range(file_manager.get_list_length()):
-            current_file = file_manager.get_current_file()
-            if not filter_ or filter_.lower() in current_file.get_basename().lower():
-                items.append(ImageItem(current_file, self.thumb_size/2))
-            file_manager.go_forward(1)
-
-        return items
-
-    @cached(liststore_cache)
-    def build_store(self, directory, filter_):
-        liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
-
-        # Retrieve the items for this dir:
-        items = self.get_items_for_dir(directory, filter_)
-
-        # And fill the store:
-        for item in items:
-            # Load the inital data:
-            liststore.append(item.initial_data())
-
-        return items, liststore
-
     def update_model(self, filter_=""):
+        dialog = ProgressBarDialog(self.window, "Loading...")
+        dialog.show()
+
+        builder = ListStoreBuilder(self.curdir, filter_, self.thumb_size)
+        updater = Updater(builder.build(),
+                          dialog.update,
+                          self.on_model_ready,
+                          (builder, dialog))
+        updater.start()
+
+    def on_model_ready(self, builder, dialog):
+        dialog.destroy()
         self.loader.clear()
 
-        items, liststore = self.build_store(self.curdir, filter_)
-
-        for index, item in enumerate(items):
+        for index, item in enumerate(builder.items):
             # Schedule an update on this item:
-            self.loader.push((self.update_item_thumbnail, (liststore, index, item)))
+            self.loader.push((self.update_item_thumbnail, 
+                             (builder.liststore, index, item)))
 
         # Update the items list:
-        self.items = items
+        self.items = builder.items
         # Associate the new liststore to the iconview:
-        self.iconview.set_model(liststore)
+        self.iconview.set_model(builder.liststore)
         # Update the curdir entry widget:
         self.location_entry.set_text(self.curdir)
 
@@ -411,27 +438,3 @@ class Gallery:
         # (https://mail.gnome.org/archives/gtk-app-devel-list/2004-September/msg00230.html)
         gobject.idle_add(lambda window: window.destroy(), self.window)
         
-class NewFolderDialog:
-    def __init__(self, parent, callback):
-        self.callback = callback
-
-        self.window = gtk.Dialog(title="New folder", 
-                                 parent=parent, 
-                                 flags=gtk.DIALOG_MODAL)
-
-        label = gtk.Label()
-        label.set_text("Enter new folder name:")
-        self.window.action_area.pack_start(label, True, True, 5)
-
-        self.entry = gtk.Entry()
-        self.entry.connect("activate", self.on_entry_activate)
-        self.window.action_area.pack_start(self.entry, True, True, 5)
-
-    def on_entry_activate(self, entry):
-        text = entry.get_text()
-        if text:
-            gtk.Widget.destroy(self.window)
-            self.callback(text)
-
-    def run(self):
-        self.window.show_all()

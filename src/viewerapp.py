@@ -8,9 +8,9 @@ import gtk
 
 from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
-from dialogs import (OpenDialog, InfoDialog, AboutDialog, BasedirSelectorDialog, 
-                     TargetSelectorDialog, RenameDialog, DirectorySelectorDialog,
-                     ProgressBarDialog)
+from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
+                     RenameDialog, DirectorySelectorDialog)
+from dialogs import (InfoDialog, AboutDialog, ProgressBarDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 

@@ -1,3 +1,4 @@
+import time
 import gobject
 
 from threading import Thread, Lock, Condition
@@ -55,6 +56,10 @@ class Worker(Thread):
             self.queue.append(job)
             self.cond.notify_all()
 
+def yield_processor():
+    # Dirty trick to make up for the lack of a "yield" operation:
+    time.sleep(0.000001)
+
 class Updater(Thread):
     def __init__(self, generator, on_progress, on_finish, on_finish_args):
         Thread.__init__(self)
@@ -67,9 +72,22 @@ class Updater(Thread):
         try:
             for progress in self.generator:
                 gobject.idle_add(self.on_progress, progress)
+                # give a chance to the main thread to update the 
+                # progressbar: (otherwise, if there are no IO
+                # operations while the generator is consumed,
+                # the main thread is never run and the UI just 
+                # blocks)
+                yield_processor()
         except Exception, e:
             print "Warning", e
 
-        self.on_finish(*self.on_finish_args)
+        # Execute the callback in the main thread (it's highly
+        # probable that it will try to modify the UI). If we
+        # run it here, many GTK assertions will fail and even
+        # SIGSEGVs may be generated
+        gobject.idle_add(self.on_finish, *self.on_finish_args)
+
+        # Trick to "auto" dispose the thread: (if the on_finish 
+        # callback tried to join this thread, it would deadlock)
         gobject.idle_add(lambda t: t.join(), self)
 
