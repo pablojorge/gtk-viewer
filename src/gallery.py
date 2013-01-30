@@ -264,6 +264,9 @@ class Gallery:
         # Buttonbar
         buttonbar = gtk.HBox(False, 0)
 
+        self.info_label = gtk.Label()
+        buttonbar.pack_start(self.info_label, False, False, 5)
+
         button = gtk.Button(stock=gtk.STOCK_OK)
         button.set_relief(gtk.RELIEF_NONE)
         button.connect("clicked", self.on_ok_clicked)
@@ -319,6 +322,8 @@ class Gallery:
         self.iconview.set_model(builder.liststore)
         # Update the curdir entry widget:
         self.location_entry.set_text(self.curdir)
+        # Update directory information:
+        self.info_label.set_text("%d items" % len(builder.items))
 
     # This is done in a separate thread:
     def update_item_thumbnail(self, liststore, index, item):

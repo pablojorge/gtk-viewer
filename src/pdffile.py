@@ -1,6 +1,7 @@
 import os
 import glob
 import tempfile
+import pexpect
 
 import gtk
 
@@ -12,6 +13,15 @@ class PDFFile(ImageFile):
     description = "pdf"
     valid_extensions = ["pdf"]
     pixbuf_cache = Cache(10)
+
+    @cached()
+    def get_pages(self):
+        output = execute(["pdfinfo", self.get_filename()], check_retcode=False)
+        for line in output.split("\n"):
+            tokens = filter(lambda x: x, line.split(" "))
+            if tokens[0].startswith("Pages:"):
+                return int(tokens[1])
+        return 0
 
     @cached(pixbuf_cache)
     def get_pixbuf(self):
@@ -33,13 +43,24 @@ class PDFFile(ImageFile):
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
         return self.get_empty_pixbuf()
 
+    def get_sha1(self):
+        # avoiding this for PDF files
+        return "Pages: %d" % (self.get_pages())
+
     def extract_contents(self, tmp_dir):
         try:
             tmp_root = os.path.join(tmp_dir, "%s" % self.get_basename())
-            yield None
-            execute(["pdfimages", "-j", self.get_filename(), tmp_root])
-        except:
+            child = pexpect.spawn("pdfimages", ["-j", self.get_filename(), tmp_root])
+            while True:
+                try:
+                    child.expect("", 0)
+                except pexpect.TIMEOUT:
+                    pass
+                yield None
+        except pexpect.EOF:
             pass
+        except Exception, e:
+            print "Warning:", e
 
     def can_be_extracted(self):
         return True
