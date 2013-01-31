@@ -63,7 +63,7 @@ class DirectoryItem(GalleryItem):
     def on_selected(self, gallery):
         gallery.on_dir_selected(self.item)
 
-class ListStoreBuilder:
+class SelectorListStoreBuilder:
     liststore_cache = Cache(shared=True, 
                             top_cache=FileScanner.cache)
 
@@ -123,7 +123,7 @@ class ListStoreBuilder:
         # Update the cache with the generated lists:
         self.liststore_cache[key] = self.items, self.liststore
 
-class Gallery:
+class GallerySelector:
     def __init__(self, title, parent, dirname, last_targets, callback,
                        dir_selector = False,
                        columns = 3,
@@ -300,7 +300,7 @@ class Gallery:
         dialog = ProgressBarDialog(self.window, "Loading...")
         dialog.show()
 
-        builder = ListStoreBuilder(self.curdir, filter_, self.thumb_size)
+        builder = SelectorListStoreBuilder(self.curdir, filter_, self.thumb_size)
         updater = Updater(builder.build(),
                           dialog.update,
                           self.on_model_ready,
@@ -441,5 +441,144 @@ class Gallery:
         # This is to avoid invoking self.window.destroy() directly, it
         # was causing a SIGSEGV after the on_cursor_changed handler ran
         # (https://mail.gnome.org/archives/gtk-app-devel-list/2004-September/msg00230.html)
+        gobject.idle_add(lambda window: window.destroy(), self.window)
+        
+class ViewerListStoreBuilder:
+    def __init__(self, files, thumb_size):
+        self.files = files
+        self.thumb_size = thumb_size
+
+        self.items = []
+        self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+
+    def build(self):
+        for file_ in self.files:
+            self.items.append(ImageItem(file_, self.thumb_size/2))
+            yield None # to pulse the progressbar
+
+        total = len(self.items)
+        for index, item in enumerate(self.items):
+            self.liststore.append(item.initial_data())
+            yield float(index) / total
+
+class GalleryViewer:
+    def __init__(self, title, parent, files, callback,
+                       columns = 4,
+                       thumb_size = 256,
+                       width = 600,
+                       height = 600):
+        self.callback = callback
+        self.thumb_size = thumb_size
+
+        self.window = gtk.Window()
+        self.window.set_position(gtk.WIN_POS_CENTER)
+        self.window.set_resizable(False)
+        self.window.set_modal(True)
+        self.window.set_type_hint(gtk.gdk.WINDOW_TYPE_HINT_DIALOG)
+        self.window.set_transient_for(parent)
+        
+        self.window.connect("key_press_event", self.on_key_press_event)
+
+        # Main HBox of the window
+        hbox = gtk.HBox(False, 5)
+        self.window.add(hbox)
+
+        # Right pane (location, iconview)
+        vbox = gtk.VBox(False, 5)
+        hbox.pack_start(vbox, True, True, 0)
+
+        # Iconview
+        self.iconview = gtk.IconView()
+        self.iconview.set_pixbuf_column(0)
+        self.iconview.set_text_column(1)
+        self.iconview.set_tooltip_column(2)
+        self.iconview.set_selection_mode(gtk.SELECTION_SINGLE)
+        self.iconview.set_item_width(self.thumb_size)
+        self.iconview.set_columns(columns)
+
+        self.iconview.connect("selection-changed", self.on_selection_changed)
+
+        scrolled = gtk.ScrolledWindow()
+        scrolled.set_policy(gtk.POLICY_AUTOMATIC, gtk.POLICY_AUTOMATIC)
+        scrolled.add_with_viewport(self.iconview)
+        scrolled.set_size_request(int((thumb_size * 1.06) * columns), height)
+
+        vbox.pack_start(scrolled, True, True, 0)
+
+        # Data initialization:
+        self.loader = Worker()
+        self.loader.start()
+        self.files = files
+        self.items = []
+        
+    def run(self):
+        self.window.show_all()
+        self.update_model()
+    
+    def update_model(self):
+        dialog = ProgressBarDialog(self.window, "Loading...")
+        dialog.show()
+
+        builder = ViewerListStoreBuilder(self.files, self.thumb_size)
+        updater = Updater(builder.build(),
+                          dialog.update,
+                          self.on_model_ready,
+                          (builder, dialog))
+        updater.start()
+
+    def on_model_ready(self, builder, dialog):
+        dialog.destroy()
+        self.loader.clear()
+
+        for index, item in enumerate(builder.items):
+            # Schedule an update on this item:
+            self.loader.push((self.update_item_thumbnail, 
+                             (builder.liststore, index, item)))
+
+        # Update the items list:
+        self.items = builder.items
+        # Associate the new liststore to the iconview:
+        self.iconview.set_model(builder.liststore)
+
+    # This is done in a separate thread:
+    def update_item_thumbnail(self, liststore, index, item):
+        pixbuf = item.final_thumbnail()
+        return (self.update_store_entry, (liststore, index, pixbuf))
+
+    # This is requested to be done by the main thread:
+    def update_store_entry(self, liststore, index, pixbuf):
+        iter_ = liststore.get_iter((index,))
+        liststore.set_value(iter_, 0, pixbuf)
+
+    def on_key_press_event(self, widget, event, data=None):
+        key_name = gtk.gdk.keyval_name(event.keyval)
+
+        bindings = {
+            "Escape" : self.close,
+        }
+
+        if key_name in bindings:
+            bindings[key_name]()
+            return True
+
+    def on_selection_changed(self, iconview):
+        selected = iconview.get_selected_items()
+
+        if not selected:
+            return
+
+        index = selected[0][0]
+        item = self.items[index]
+        iconview.unselect_all()
+
+        item.on_selected(self)
+        
+    def on_image_selected(self, item):
+        self.callback(item.get_filename())
+        self.close()
+
+    def close(self):
+        self.loader.stop()
+        self.loader.join()
         gobject.idle_add(lambda window: window.destroy(), self.window)
         

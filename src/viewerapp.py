@@ -8,6 +8,7 @@ import gtk
 
 from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
+from gallery import GalleryViewer
 from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
                      RenameDialog, DirectorySelectorDialog)
 from dialogs import (InfoDialog, AboutDialog, ProgressBarDialog)
@@ -670,6 +671,9 @@ class ViewerApp:
                              "accel" : (gtk.keysyms.minus, 0),
                              "handler" : self.on_zoom_out},
                             {"separator" : True},
+                            {"text" : "Gallery view",
+                             "accel" : "W",
+                             "handler" : self.on_gallery_view},
                             {"toggle" : "Fullscreen",
                              "accel" : "L",
                              "key" : "fullscreen_toggle",
@@ -1379,6 +1383,13 @@ class ViewerApp:
                                          last_targets=self.last_targets, 
                                          callback=self.on_base_dir_selected)
         selector.run()
+
+    def on_gallery_view(self, _):
+        gallery = GalleryViewer(title="", 
+                                parent=self.window, 
+                                files=self.file_manager.get_files(),
+                                callback=self.file_manager.go_file)
+        gallery.run()
 
     def on_reuse_target(self, _):
         if not self.last_targets:

@@ -9,7 +9,6 @@ Enhancements:
  - Application name and icon
 
 Features:
- + Gallery view of currently opened files
  - Show images metadata
  - Support for copying files
  - Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)

@@ -8,7 +8,7 @@ from pdffile import PDFFile
 from epubfile import EPUBFile
 from videofile import VideoFile
 
-from gallery import Gallery
+from gallery import GallerySelector
 
 class FileSelectorDialogGTK:
     def __init__(self, title, initial_dir, initial_filename, callback):
@@ -87,15 +87,15 @@ class FileSelectorDialogGTK:
 
 class DirectorySelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, last_targets, callback):
-        self.gallery = Gallery(title, parent, initial_dir, last_targets, 
-                               callback, dir_selector=True)
+        self.gallery = GallerySelector(title, parent, initial_dir, last_targets, 
+                                       callback, dir_selector=True)
 
     def run(self):
         self.gallery.run()
 
 class FileSelectorDialogCustom:
     def __init__(self, title, parent, initial_dir, initial_filename, callback):
-        self.gallery = Gallery(title, parent, initial_dir, [], callback)
+        self.gallery = GallerySelector(title, parent, initial_dir, [], callback)
 
     def run(self):
         self.gallery.run()

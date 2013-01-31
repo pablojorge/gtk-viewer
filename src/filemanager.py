@@ -40,6 +40,9 @@ class FileList:
         self.files = files
         self.actual = copy.copy(files)
 
+    def get_files(self):
+        return self.actual
+
     @if_empty(lambda: EmptyImage())
     def get_item_at(self, index):
         return self.actual[index % len(self.actual)]
@@ -77,6 +80,9 @@ class FileManager:
 
     def set_files(self, files):
         self.filelist.set_files(map(FileFactory.create, files))
+
+    def get_files(self):
+        return self.filelist.get_files()
 
     def get_current_file(self):
         return self.filelist.get_item_at(self.index)

@@ -88,6 +88,8 @@ class File:
     def __eq__(self, other):
         if isinstance(other, str):
             return self.filename == other
+        elif isinstance(other, File):
+            return self.filename == other.filename
         else:
             raise Exception("Can't compare File to " + repr(other))
 
@@ -210,6 +212,8 @@ class ImageFile(File):
         return tags
 
     def get_orientation(self):
+        # Orientation constants taken from:
+        # http://sylvana.net/jpegcrop/exif_orientation.html
         angle_constants = {3: 180, 6: 90, 8: 270}
         orientation = self.get_tags().get("Orientation", 0)
         return angle_constants.get(orientation, 0)
