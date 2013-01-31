@@ -1182,12 +1182,12 @@ class ViewerApp:
         # Markup reference:
         # http://www.gtk.org/api/2.6/pango/PangoMarkupFormat.html
 
-        file_info = "<i>Date:</i> %s | <i>Dimensions:</i> %s pixels | <i>Size:</i> %s | <i>Zoom:</i> %d%%\n<i>SHA1:</i> %s" % \
-                    (image_file.get_mtime(),
-                     image_file.get_dimensions(),
-                     image_file.get_filesize(), 
-                     self.image_viewer.get_zoom_factor(),
-                     image_file.get_sha1())
+        file_info  = "<i>Date:</i> %s | " % image_file.get_mtime()
+        file_info += "<i>Dimensions:</i> %s pixels | " % image_file.get_dimensions()
+        file_info += "<i>Size:</i> %s | " % image_file.get_filesize()
+        file_info += "<i>Zoom:</i> %d%% | " % self.image_viewer.get_zoom_factor()
+        file_info += "<i>Rotation:</i> %d degrees\n" % image_file.get_rotation()
+        file_info += "<i>SHA1:</i> %s" % image_file.get_sha1()
 
         file_info += "\n<i>Base directory:</i> <b>%s</b>" % self.base_dir
 

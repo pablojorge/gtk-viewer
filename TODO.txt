@@ -9,7 +9,7 @@ Enhancements:
  - Application name and icon
 
 Features:
- + Extract and apply JPEG image rotation metadata (http://tilloy.net/dev/pyexiv2/, http://www.pythonware.com/products/pil/)
+ + Gallery view of currently opened files
  - Show images metadata
  - Support for copying files
  - Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)

@@ -6,6 +6,9 @@ import string
 
 import gtk
 
+from PIL import Image as PILImage
+from PIL.ExifTags import TAGS as PILExifTags
+
 from cache import Cache, cached
 from system import trash, untrash, external_open
 
@@ -155,6 +158,9 @@ class ImageFile(File):
         angle = (+90 if clockwise else -90)
         self.rotation = (self.rotation + angle) % 360
 
+    def get_rotation(self):
+        return (self.get_orientation() + self.rotation) % 360
+
     def get_pixbuf_at_size(self, width, height):
         angle_constants = {0: gtk.gdk.PIXBUF_ROTATE_NONE,
                            90: gtk.gdk.PIXBUF_ROTATE_CLOCKWISE,
@@ -162,7 +168,7 @@ class ImageFile(File):
                            270: gtk.gdk.PIXBUF_ROTATE_COUNTERCLOCKWISE}
     
         pixbuf = self.get_pixbuf()
-        rotated = pixbuf.rotate_simple(angle_constants[self.rotation])
+        rotated = pixbuf.rotate_simple(angle_constants[self.get_rotation()])
         scaled = rotated.scale_simple(width, height, gtk.gdk.INTERP_BILINEAR)
         flipped = scaled.flip(True) if self.flip_h else scaled
         flipped = flipped.flip(False) if self.flip_v else flipped
@@ -173,7 +179,7 @@ class ImageFile(File):
         width, height = (self.get_pixbuf().get_width(), 
                          self.get_pixbuf().get_height())
 
-        if self.rotation in (90, 270):
+        if self.get_rotation() in (90, 270):
             width, height = height, width
 
         return ImageDimensions(width, height)
@@ -190,6 +196,23 @@ class ImageFile(File):
         height = int(dimensions.get_height() * factor)
 
         return width, height
+
+    @cached()
+    def get_tags(self):
+        tags = {}
+        try:
+            image = PILImage.open(self.get_filename())
+            for tag, value in image._getexif().iteritems():
+                decoded = PILExifTags.get(tag, tag)
+                tags[decoded] = value
+        except Exception, e:
+            pass
+        return tags
+
+    def get_orientation(self):
+        angle_constants = {3: 180, 6: 90, 8: 270}
+        orientation = self.get_tags().get("Orientation", 0)
+        return angle_constants.get(orientation, 0)
 
     def get_empty_pixbuf(self):
         pixbuf = gtk.gdk.Pixbuf(colorspace=gtk.gdk.COLORSPACE_RGB, 
