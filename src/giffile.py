@@ -1,8 +1,11 @@
+import os
 import gtk
+import pexpect
 
 from imagefile import ImageFile
 from cache import Cache, cached
 
+from system import execute
 from threads import yield_processor
 
 class GIFFile(ImageFile):
@@ -36,3 +39,30 @@ class GIFFile(ImageFile):
         loader.close()
         return loader.get_animation()
 
+    def extract_contents(self, tmp_dir):
+        try:
+            total = len(execute(["identify", self.get_filename()]).split("\n"))
+
+            tmp_root = os.path.join(tmp_dir, "%s_%%04d" % self.get_basename())
+            # http://www.imagemagick.org/Usage/anim_basics/#coalesce
+            child = pexpect.spawn("convert", ["-verbose",
+                                              self.get_filename(), 
+                                              "-coalesce", 
+                                              tmp_root])
+
+            index = 0
+            while True:
+                try:
+                    child.expect(self.get_filename() + "\=\>")
+                    index += 1
+                except pexpect.TIMEOUT:
+                    pass
+                yield float(index) / total
+
+        except pexpect.EOF:
+            pass
+        except Exception, e:
+            print "Warning:", e
+
+    def can_be_extracted(self):
+        return True
