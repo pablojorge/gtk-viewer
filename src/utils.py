@@ -1,13 +1,17 @@
-import sys
 import time
 
+import threading
+
 # Python tricks:
-def trace(prefix):
+def trace(prefix, show_ret=False):
     def decorator(func):
         def wrapper(*args):
-            print "%s.%s: %s -> " % (prefix, func.__name__, args)
+            signature = "[%s] %s.%s: %s" % (threading.current_thread().getName(),
+                                            prefix, func.__name__, args)
+            print signature, "..."
             ret = func(*args)
-            #sys.stdout.write("%s\n" % ret)
+            if show_ret:
+                print signature, "->", ret
             return ret
         return wrapper
     return decorator

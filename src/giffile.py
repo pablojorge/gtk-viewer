@@ -3,6 +3,8 @@ import gtk
 from imagefile import ImageFile
 from cache import Cache, cached
 
+from threads import yield_processor
+
 class GIFFile(ImageFile):
     description = "gif"
     valid_extensions = ["gif"]
@@ -26,7 +28,11 @@ class GIFFile(ImageFile):
         loader = gtk.gdk.PixbufLoader()
         loader.set_size(width, height)
         with open(self.get_filename(), "r") as input_:
-            loader.write(input_.read())
+            buf = input_.read(8192)
+            while buf:
+                loader.write(buf)
+                yield_processor() # Otherwise the UI will lock...
+                buf = input_.read(8192)
         loader.close()
         return loader.get_animation()
 

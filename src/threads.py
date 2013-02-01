@@ -6,6 +6,10 @@ from threading import Thread, Lock, Condition
 # Run this once during application start:
 gobject.threads_init()
 
+# Dirty trick to make up for the lack of a "yield" operation:
+def yield_processor():
+    time.sleep(0.000001)
+
 # Use this thread to postpone work and update the GUI asynchronously.
 # The idea is to push a function and some parameters, and that function
 # will be executed in a separate thread. This function must NOT update
@@ -37,7 +41,10 @@ class Worker(Thread):
     def execute(self, job, params):
         try:
             func, args = job(*params)
-            gobject.idle_add(func, *args)
+            # The async function may decide to NOT update
+            # the UI:
+            if func:
+                gobject.idle_add(func, *args)
         except Exception, e:
             print "Warning:", e
 
@@ -55,10 +62,6 @@ class Worker(Thread):
         with self.cond:
             self.queue.append(job)
             self.cond.notify_all()
-
-def yield_processor():
-    # Dirty trick to make up for the lack of a "yield" operation:
-    time.sleep(0.000001)
 
 class Updater(Thread):
     def __init__(self, generator, on_progress, on_finish, on_finish_args):

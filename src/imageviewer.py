@@ -6,6 +6,7 @@ class ImageViewer:
         self.widget = gtk.Image()
         self.zoom_factor = 100
         self.image_file = None
+        self.size = (1, 1)
 
     def get_widget(self):
         return self.widget
@@ -17,6 +18,12 @@ class ImageViewer:
         if zoom_factor > 1:
             self.zoom_factor = zoom_factor
 
+    def get_size(self):
+        return self.size
+
+    def set_size(self, width, height):
+        self.size = (width, height)
+
     def reset(self):
         self.image_file = None
         self.set_zoom_factor(100)
@@ -25,13 +32,11 @@ class ImageViewer:
     def load(self, image_file):
         self.image_file = image_file
         self.set_zoom_factor(100)
-        self.redraw()
 
     def load_at_size(self, image_file, width, height):
         self.image_file = image_file
         self.widget.set_size_request(width, height)
         self.force_zoom(width, height)
-        self.redraw()
 
     def zoom_at_size(self, width, height):
         self.force_zoom(width, height)
@@ -89,6 +94,7 @@ class ThumbnailViewer(ImageViewer):
 
     def load(self, image_file):
         self.load_at_size(image_file, self.th_size, self.th_size)
+        self.redraw()
 
     def redraw(self):
         if self.hidden:

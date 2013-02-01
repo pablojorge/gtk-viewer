@@ -520,7 +520,6 @@ class ViewerApp:
 
         # Main viewer
         self.image_viewer = ImageViewer() 
-        self.scrolled_size = None
         self.scrolled = AutoScrolledWindow(child=self.image_viewer.get_widget(),
                                            bg_color=self.BG_COLOR,
                                            on_special_drag_left=self.on_viewer_drag_left,
@@ -569,8 +568,10 @@ class ViewerApp:
 
         # Loaders pool:
         self.pool = []
+        self.main_loader = Worker()
         self.loader_left = Worker()
         self.loader_right = Worker()
+        self.pool.append(self.main_loader)
         self.pool.append(self.loader_left)
         self.pool.append(self.loader_right)
 
@@ -1113,8 +1114,7 @@ class ViewerApp:
 
     def reload_viewer(self):
         current_file = self.file_manager.get_current_file()
-        anim_enabled = self.widget_manager.get("animation_toggle").get_active()
-        current_file.set_anim_enabled(anim_enabled)
+        current_file.set_anim_enabled(False)
 
         # Handle star toggle
         with self.widget_manager.get_blocked("star_toggle") as star_toggle:
@@ -1124,8 +1124,9 @@ class ViewerApp:
             star_button.set_active(current_file.is_starred()) 
 
         # Update main viewer and thumbnails
-        self.image_viewer.load(current_file)
         missing_image = GTKIconImage(gtk.STOCK_MISSING_IMAGE, 128)
+        self.image_viewer.load(current_file)
+        self.fit_viewer(force=True) # Force immediate (and scaled) redraw
         self.th_left.load(missing_image)
         self.th_right.load(missing_image)
         self.loader_left.clear()
@@ -1134,6 +1135,9 @@ class ViewerApp:
         self.loader_right.clear()
         self.loader_right.push((self.prepare_thumbnail, 
                                (self.th_right, self.file_manager.get_next_file())))
+        self.main_loader.clear()
+        self.main_loader.push((self.preload_main_viewer, 
+                               (self.image_viewer, current_file)))
 
         # Handle extract buttons
         self.widget_manager.get("extract_mitem").set_sensitive(current_file.can_be_extracted())
@@ -1150,9 +1154,30 @@ class ViewerApp:
         # Refresh the pinbar buckets
         self.pinbar.refresh_buckets()
 
-        self.fit_viewer(force=True)
         self.refresh_info()
 
+    # This function will load the animated GIF in a separate thread:
+    def preload_main_viewer(self, viewer, file_):
+        anim_enabled = self.widget_manager.get("animation_toggle").get_active()
+        file_.set_anim_enabled(anim_enabled)
+        if anim_enabled:
+            try:
+                viewer.force_zoom(*viewer.get_size())
+                file_.get_pixbuf_anim_at_size(*viewer.get_scaled_size())
+                return (self.load_main_viewer, (viewer, file_))
+            except:
+                return (None, None)
+        else:
+            return (None, None)
+
+    # This function will just reload the main viewer, after enabling
+    # animation for the current file and having loaded the animated
+    # pixbuf in the cache (so the loading operation doesn't block the 
+    # main thread):
+    def load_main_viewer(self, viewer, file_):
+        self.fit_viewer(force=True)
+
+    # This function will preload the thumbnail in a separate thread:
     def prepare_thumbnail(self, thumb, file_):
         file_.get_pixbuf() # it will be obtained and cached
         return (thumb.load, (file_,))
@@ -1161,9 +1186,9 @@ class ViewerApp:
         allocation = self.scrolled.get_widget().allocation
         width, height = allocation.width, allocation.height
         # Only redraw if size changed:
-        if (width, height) != self.scrolled_size or force:
+        if (width, height) != self.image_viewer.get_size() or force:
             self.image_viewer.zoom_at_size(width, height)
-            self.scrolled_size = (width, height)
+            self.image_viewer.set_size(width, height)
 
     def refresh_info(self):
         self.refresh_title()

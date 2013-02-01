@@ -3,7 +3,7 @@ Bugs:
    it may end up misplaced in the original (non-filtered) list
 
 Enhancements:
- + Asynchronous loading of main image viewer (mainly for GIF files, other files will be pre-loaded in the thumbnails)
+ - Fix responsibilities of load, load_at_size methods (when to redraw, how to obtain size, default zoom factor when loading) -> fix how animated GIF are preloaded
  - Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
  - Support for delete / undelete in Mac OS X
  - Application name and icon
