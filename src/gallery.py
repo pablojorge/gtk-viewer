@@ -12,6 +12,7 @@ from thumbnail import DirectoryThumbnail
 from dialogs import NewFolderDialog, ProgressBarDialog
 
 from cache import Cache, cached
+from system import execute
 from threads import Worker, Updater
 
 class GalleryItem:
@@ -217,9 +218,20 @@ class GallerySelector:
         toolbar.insert(button, -1)
         self.go_up = button
 
-        button = gtk.ToolButton(gtk.STOCK_DIRECTORY)
+        button = gtk.ToolButton(gtk.STOCK_ADD)
         button.set_label("New folder")
         button.connect("clicked", self.on_new_folder)
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_OPEN)
+        button.set_label("Open Nautilus")
+        button.connect("clicked", self.on_open_nautilus)
+        button.set_is_important(True)
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_REFRESH)
+        button.connect("clicked", self.on_refresh)
         button.set_is_important(True)
         toolbar.insert(button, -1)
 
@@ -370,6 +382,13 @@ class GallerySelector:
 
         dialog = NewFolderDialog(self.window, on_entry)
         dialog.run()
+
+    def on_open_nautilus(self, widget):
+        execute(["nautilus", self.curdir])
+
+    def on_refresh(self, widget):
+        FileManager().on_dir_changed(self.curdir)
+        self.update_model()
 
     def on_location_entry_activate(self, entry):
         directory = entry.get_text()

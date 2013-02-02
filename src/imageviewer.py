@@ -104,6 +104,8 @@ class ThumbnailViewer(ImageViewer):
             self.fill()
             return
 
+        self.force_zoom(self.th_size, self.th_size)
+
         dimensions = self.image_file.get_dimensions()
 
         width = int(math.ceil((dimensions.get_width() * self.zoom_factor) / 100))
