@@ -1,6 +1,7 @@
 import os
 import time
 import gtk
+import glob
 import tempfile
 
 import datetime
@@ -71,8 +72,11 @@ class VideoFile(ImageFile):
                                               self.get_duration())
 
     def extract_frames(self, offset, rate, tmp_dir):
-        pattern = os.path.join(tmp_dir, "%s-%%06d.jpg" % self.get_basename())
+        time_placeholder = "__TIME__"
+        pattern = os.path.join(tmp_dir, "%s-%%06d%s.jpg" % (self.get_basename(), 
+                                                            time_placeholder))
 
+        # Extract the frames:
         try:
             child = pexpect.spawn("ffmpeg", ["-ss", str(offset), 
                                              "-i", self.get_filename(), 
@@ -93,6 +97,23 @@ class VideoFile(ImageFile):
         except Exception, e:
             print "Warning:", e
 
+        # Fill the placeholder in each file with the frame time:
+        try:
+            for filename in glob.glob(os.path.join(tmp_dir, "*")):
+                index = filename.rindex(time_placeholder)
+                frame = float(filename[index-6:index])-1
+
+                time_ = frame / rate
+                hours, remainder = divmod(time_, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                microseconds = (frame % rate) * ((10**6) * round(1.0/rate, 2))
+                position = "%02d:%02d:%02d.%06d" % (hours, minutes, seconds, microseconds)
+
+                os.rename(filename, filename.replace(time_placeholder, "-%s" % position))
+                yield None
+        except Exception, e:
+            print "Warning:", e
+
     def extract_contents(self, tmp_dir, rate):
         return self.extract_frames(offset=0,
                                    rate=rate,
@@ -102,5 +123,5 @@ class VideoFile(ImageFile):
         return True
 
     def get_extract_args(self):
-        return [("Frame rate", int, "rate", 1)]
+        return [("Frame rate", float, "rate", 1)]
 
