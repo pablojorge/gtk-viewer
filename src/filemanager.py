@@ -184,6 +184,33 @@ class FileManager:
                       undo_action)
 
     @skip_if_empty
+    def copy_current(self, target_dir, target_name=''):
+        current = self.get_current_file()
+        orig_filename = current.get_filename()
+
+        if not target_name:
+            target_name = current.get_basename()
+
+        new_filename = os.path.join(target_dir, target_name)
+
+        if os.path.isfile(new_filename):
+            return self.handle_duplicate_copy(target_dir, target_name)
+
+        current.copy(new_filename)
+        self.on_dir_changed(target_dir)
+        self.on_list_modified()
+
+        def undo_action():
+            copied = FileFactory.create(new_filename)
+            copied.trash()
+            self.on_dir_changed(target_dir)
+            self.go_file(orig_filename)
+
+        return Action(Action.NORMAL,
+                      "'%s' copied to '%s'" % (orig_filename, target_dir),
+                      undo_action)
+
+    @skip_if_empty
     def move_current(self, target_dir, target_name=''):
         current = self.get_current_file()
         orig_index = self.get_current_index()
@@ -196,7 +223,7 @@ class FileManager:
         new_filename = os.path.join(target_dir, target_name)
 
         if os.path.isfile(new_filename):
-            return self.handle_duplicate(target_dir, target_name)
+            return self.handle_duplicate_move(target_dir, target_name)
 
         current.rename(new_filename)
         self.on_dir_changed(orig_dirname)
@@ -283,7 +310,24 @@ class FileManager:
 
         return candidate
 
-    def handle_duplicate(self, target_dir, target_name):
+    def handle_duplicate_copy(self, target_dir, target_name):
+        current = self.get_current_file()
+        orig_filename = current.get_filename()
+        new_file = FileFactory.create(os.path.join(target_dir, target_name))
+
+        if current.get_sha1() == new_file.get_sha1():
+            self.on_list_modified()
+            return Action(Action.NORMAL,
+                          "'%s' skipped to avoid duplicates" % orig_filename,
+                          lambda: None)
+        else:
+            candidate = self.get_safe_candidate(target_dir)
+            action = self.copy_current(target_dir, candidate)
+            action.severity = Action.WARNING
+            action.description = "'%s' auto-renamed to '%s' in '%s'" % (orig_filename, candidate, target_dir)
+            return action
+
+    def handle_duplicate_move(self, target_dir, target_name):
         current = self.get_current_file()
         orig_filename = current.get_filename()
         new_file = FileFactory.create(os.path.join(target_dir, target_name))

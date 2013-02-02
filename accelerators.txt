@@ -25,7 +25,7 @@ U: undo
 V: view image full
 W: gallery of current fileset
 X: external viewer
-Y:
+Y: copy file
 Z: toggle zoom mode
 .: reuse target
 +: zoom in

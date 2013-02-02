@@ -93,6 +93,9 @@ class File:
         else:
             raise Exception("Can't compare File to " + repr(other))
 
+    def copy(self, new_name):
+        shutil.copy(self.filename, new_name)
+
     def rename(self, new_name):
         shutil.move(self.filename, new_name)
         self.filename = new_name

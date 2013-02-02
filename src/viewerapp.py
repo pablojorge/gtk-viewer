@@ -637,6 +637,9 @@ class ViewerApp:
                             {"text" : "Select base directory",
                              "accel" : "B",
                              "handler" : self.on_select_base_dir},
+                            {"text" : "Copy to target",
+                             "accel" : "Y",
+                             "handler" : self.on_copy_to_target},
                             {"text" : "Move to target",
                              "accel" : "M",
                              "handler" : self.on_move_to_target},
@@ -1070,6 +1073,9 @@ class ViewerApp:
     ##
 
     ## Internal callbacks
+    def on_copy_target_selected(self, target):
+        self.copy_current(target)
+
     def on_target_selected(self, target):
         self.move_current(target)
 
@@ -1105,12 +1111,18 @@ class ViewerApp:
     ## 
 
     ## Internal helpers
-    def move_current(self, target_dir):
+    def update_target(self, target_dir):
         if target_dir in self.last_targets:
             self.last_targets.remove(target_dir)
 
         self.last_targets.insert(0, target_dir)
 
+    def copy_current(self, target_dir):
+        self.update_target(target_dir)
+        self.undo_stack.push(self.file_manager.copy_current(target_dir))
+
+    def move_current(self, target_dir):
+        self.update_target(target_dir)
         self.undo_stack.push(self.file_manager.move_current(target_dir))
 
     def reload_viewer(self):
@@ -1385,6 +1397,13 @@ class ViewerApp:
             return self.base_dir
         else:
             return self.file_manager.get_current_file().get_dirname()
+
+    def on_copy_to_target(self, _):
+        selector = TargetSelectorDialog(parent=self.window,
+                                        initial_dir=self.get_base_dir(), 
+                                        last_targets=self.last_targets, 
+                                        callback=self.on_copy_target_selected)
+        selector.run()
 
     def on_move_to_target(self, _):
         selector = TargetSelectorDialog(parent=self.window,
