@@ -70,7 +70,7 @@ class VideoFile(ImageFile):
         return "Duration: %s (%d seconds)" % (datetime.timedelta(seconds=self.get_duration()),
                                               self.get_duration())
 
-    def extract_frames(self, offset, rate, count, tmp_dir):
+    def extract_frames(self, offset, rate, tmp_dir):
         pattern = os.path.join(tmp_dir, "%s-%%06d.jpg" % self.get_basename())
 
         try:
@@ -78,7 +78,6 @@ class VideoFile(ImageFile):
                                              "-i", self.get_filename(), 
                                              "-r", str(rate), 
                                              "-qscale", "1", 
-                                             "-vframes", str(count),
                                              pattern])
             first = True
             while True:
@@ -94,12 +93,14 @@ class VideoFile(ImageFile):
         except Exception, e:
             print "Warning:", e
 
-    def extract_contents(self, tmp_dir):
+    def extract_contents(self, tmp_dir, rate):
         return self.extract_frames(offset=0,
-                                   rate=1,
-                                   count=self.get_duration(),
+                                   rate=rate,
                                    tmp_dir=tmp_dir)
 
     def can_be_extracted(self):
         return True
+
+    def get_extract_args(self):
+        return [("Frame rate", int, "rate", 1)]
 

@@ -11,7 +11,8 @@ from filemanager import Action, FileManager
 from gallery import GalleryViewer
 from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
                      RenameDialog, DirectorySelectorDialog)
-from dialogs import (InfoDialog, AboutDialog, ProgressBarDialog)
+from dialogs import (InfoDialog, ErrorDialog, AboutDialog, TextEntryDialog, 
+                     ProgressBarDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 
@@ -1526,11 +1527,24 @@ class ViewerApp:
 
     def on_extract_contents(self, _):
         current_file = self.file_manager.get_current_file()
+
+        # Get special args:
+        kw_args = {}
+        for arg, type_, key, default in current_file.get_extract_args():
+            dialog = TextEntryDialog(self.window, arg + ":", str(default))
+            value = dialog.run()
+            try:
+                value = type_(value)
+            except Exception, e:
+                ErrorDialog(self.window, "Error: " + str(e)).run()
+                return
+            kw_args[key] = type_(value)
+
         # Create a temporary dir to hold the contents:
         tmp_dir = tempfile.mkdtemp(suffix="gtk-viewer")
         dialog = ProgressBarDialog(self.window, "Extracting contents...")
         dialog.show()
-        updater = Updater(current_file.extract_contents(tmp_dir),
+        updater = Updater(current_file.extract_contents(tmp_dir, **kw_args),
                           dialog.update,
                           self.on_extraction_finished,
                           (tmp_dir, dialog))

@@ -120,7 +120,7 @@ class File:
         self.rename(os.path.join(self.get_dirname(), 
                                  string.join((new_name, ext), sep)))
 
-    def extract_contents(self):
+    def extract_contents(self, tmp_dir, **kw_args):
         pass
 
     def set_anim_enabled(self, enable):
@@ -128,6 +128,9 @@ class File:
 
     def can_be_extracted(self):
         return False
+
+    def get_extract_args(self):
+        return []
 
 class ImageFile(File):
     description = "image"
