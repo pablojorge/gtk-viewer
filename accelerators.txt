@@ -8,7 +8,7 @@ C-F: flip vertical
 G: gif animation on/off
 H: goto first
 I: invert sort order
-J:
+J: jump to
 K: delete
 L: full screen
 M: move

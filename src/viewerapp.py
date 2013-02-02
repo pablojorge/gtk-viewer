@@ -757,6 +757,9 @@ class ViewerApp:
                             {"stock" : "Jump back",
                              "accel" : "<Alt>Left",
                              "handler" : self.on_jump_back},
+                            {"stock" : gtk.STOCK_JUMP_TO,
+                             "accel" : "J",
+                             "handler" : self.on_jump_to},
                             {"separator" : True},
                             {"menu" : {"text" : "Sort by ...",
                                        "items" : [{"toggle" : "Sort by name",
@@ -937,6 +940,11 @@ class ViewerApp:
         button = gtk.ToolButton(gtk.STOCK_MEDIA_FORWARD)
         button.connect("clicked", self.on_jump_forward)
         button.set_tooltip(tooltips, "Jump forward")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_JUMP_TO)
+        button.connect("clicked", self.on_jump_to)
+        button.set_tooltip(tooltips, "Jump to")
         toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_GO_BACK)
@@ -1386,6 +1394,18 @@ class ViewerApp:
     def on_jump_back(self, _):
         self.file_manager.go_backward(10)
 
+    def on_jump_to(self, _):
+        dialog = TextEntryDialog(self.window, "Jump to:")
+        value = dialog.run()
+        if value is None:
+            return
+        try:
+            value = int(value)-1
+        except Exception, e:
+            ErrorDialog(self.window, "Error: " + str(e)).run()
+            return
+        self.file_manager.go_to(value)
+
     def on_go_forward(self, _):
         self.file_manager.go_forward(1)
 
@@ -1552,6 +1572,8 @@ class ViewerApp:
         for arg, type_, key, default in current_file.get_extract_args():
             dialog = TextEntryDialog(self.window, arg + ":", str(default))
             value = dialog.run()
+            if value is None:
+                return
             try:
                 value = type_(value)
             except Exception, e:

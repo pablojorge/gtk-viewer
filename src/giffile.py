@@ -43,7 +43,8 @@ class GIFFile(ImageFile):
         try:
             total = len(execute(["identify", self.get_filename()]).split("\n"))
 
-            tmp_root = os.path.join(tmp_dir, "%s_%%04d" % self.get_basename())
+            basename, _, ext = self.get_basename().rpartition(".")
+            tmp_root = os.path.join(tmp_dir, "%s_%%04d.%s" % (basename, ext))
             # http://www.imagemagick.org/Usage/anim_basics/#coalesce
             child = pexpect.spawn("convert", ["-verbose",
                                               self.get_filename(), 

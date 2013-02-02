@@ -128,6 +128,11 @@ class FileManager:
         self.on_list_modified()
 
     @skip_if_empty
+    def go_to(self, index):
+        self.index = max(min(index,self.filelist.get_length()-1), 0)
+        self.on_list_modified()
+
+    @skip_if_empty
     def go_file(self, filename):
         self.index = self.filelist.find(filename)
         self.on_list_modified()
