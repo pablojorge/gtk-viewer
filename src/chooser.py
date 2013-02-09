@@ -4,6 +4,7 @@ import gtk
 from filefactory import FileFactory
 from imageviewer import ThumbnailViewer
 
+from archivefile import ArchiveFile
 from pdffile import PDFFile
 from epubfile import EPUBFile
 from videofile import VideoFile
@@ -44,7 +45,8 @@ class FileSelectorDialogGTK:
         img_filter = gtk.FileFilter()
         img_filter.set_name("All supported files")
         img_filter.add_pixbuf_formats()
-        for ext in (PDFFile.valid_extensions +
+        for ext in (ArchiveFile.valid_extensions,
+                    PDFFile.valid_extensions +
                     EPUBFile.valid_extensions +
                     VideoFile.valid_extensions):
             img_filter.add_pattern("*." + ext)
@@ -55,6 +57,7 @@ class FileSelectorDialogGTK:
         img_filter.add_pixbuf_formats()
         self.chooser.add_filter(img_filter)
 
+        self.add_filter("Archive Files", ArchiveFile.valid_extensions)
         self.add_filter("PDF Files", PDFFile.valid_extensions)
         self.add_filter("EPub Files", EPUBFile.valid_extensions)
         self.add_filter("Video Files", VideoFile.valid_extensions)

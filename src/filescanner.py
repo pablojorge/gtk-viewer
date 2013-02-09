@@ -7,6 +7,7 @@ from videofile import VideoFile
 from giffile import GIFFile
 from pdffile import PDFFile
 from epubfile import EPUBFile
+from archivefile import ArchiveFile
 
 from cache import Cache, cached
 
@@ -42,7 +43,8 @@ class FileFilter:
                  "videos" : VideoFile.valid_extensions,
                  "gifs" : GIFFile.valid_extensions,
                  "pdfs" : PDFFile.valid_extensions,
-                 "epubs" : EPUBFile.valid_extensions }
+                 "epubs" : EPUBFile.valid_extensions,
+                 "archives" : ArchiveFile.valid_extensions }
 
     @classmethod
     def get_valid_filetypes(cls):
