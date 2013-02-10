@@ -135,6 +135,9 @@ class File:
     def get_extract_args(self):
         return []
 
+    def get_metadata(self):
+        return []
+
 class ImageFile(File):
     description = "image"
     pixbuf_cache = Cache(10)
@@ -216,6 +219,12 @@ class ImageFile(File):
         except Exception, e:
             pass
         return tags
+
+    def get_metadata(self):
+        tags = self.get_tags()
+        if not tags:
+            return None
+        return [("Tag", "Value")] + sorted(tags.iteritems())
 
     def get_orientation(self):
         # Orientation constants taken from:

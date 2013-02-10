@@ -1,3 +1,4 @@
+Key/Combination: Action
 A: toggle toolbar
 B: select base dir
 C: show status bar
@@ -28,8 +29,10 @@ X: external viewer
 Y: copy file
 Z: toggle zoom mode
 .: reuse target
+,: show file information
 +: zoom in
 -: zoom out
+?: show this reference
 Left: go back
 Right: go forward
 End: go last

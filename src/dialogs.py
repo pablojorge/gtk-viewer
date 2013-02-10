@@ -14,6 +14,32 @@ class AboutDialog:
     def show(self):
         self.window.show_all()
 
+class TabbedInfoDialog:
+    def __init__(self, parent, info):
+        self.window = gtk.Dialog(title="Information", parent=parent, flags=gtk.DIALOG_MODAL)
+
+        table = gtk.Table(rows=len(info), columns=len(info[0]))
+        table.set_col_spacings(20)
+
+        # Build the header
+        for index, column in enumerate(info[0]):
+            label = gtk.Label()
+            label.set_markup("<b>%s</b>" % column)
+            label.set_alignment(0, 0.5)
+            table.attach(label, index, index+1, 0, 1)
+
+        # Build the rows
+        for index_y, row in enumerate(info[1:]):
+            for index_x, column in enumerate(row):
+                label = gtk.Label(str=column)
+                label.set_alignment(0, 0.5)
+                table.attach(label, index_x, index_x+1, index_y + 1, index_y + 2)
+
+        self.window.action_area.pack_start(table, True, True, 5)
+
+    def show(self):
+        self.window.show_all()
+
 class InfoDialog:
     def __init__(self, parent, message):
         self.md = gtk.MessageDialog(parent, 

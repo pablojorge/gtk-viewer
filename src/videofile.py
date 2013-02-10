@@ -2,6 +2,7 @@ import os
 import time
 import gtk
 import glob
+import string
 import tempfile
 
 import datetime
@@ -24,17 +25,26 @@ class VideoFile(ImageFile):
         self.lock = Lock()
 
     @cached()
+    def get_metadata(self):
+        info = [("Property", "Value")]
+        output = execute(["avconv", "-i", self.get_filename()], check_retcode=False)
+        for line in filter(lambda x: x, output.split("\n"))[4:]:
+            tokens = map(string.strip, line.split(":"))
+            if tokens[0].startswith("Stream"):
+                break # Stop when avconv starts to dump streams metadata
+            info.append((tokens[0], string.join(tokens[1:], ":")))
+        return info
+
+    @cached()
     def get_duration(self):
-        output = execute(["ffmpeg", "-i", self.get_filename()], check_retcode=False)
-        for line in output.split("\n"):
-            tokens = map(lambda s: s.strip(), line.split(","))
-            if tokens[0].startswith("Duration:"):
-                dummy, duration = tokens[0].split(": ")
-                st_time = time.strptime(duration.split(".")[0], "%H:%M:%S")
-                delta = datetime.timedelta(hours=st_time.tm_hour,
-                                           minutes=st_time.tm_min,
-                                           seconds=st_time.tm_sec)
-                return delta.seconds
+        metadata = dict(self.get_metadata())
+        if metadata.has_key("Duration"):
+            duration = metadata["Duration"]
+            st_time = time.strptime(duration.split(".")[0], "%H:%M:%S")
+            delta = datetime.timedelta(hours=st_time.tm_hour,
+                                       minutes=st_time.tm_min,
+                                       seconds=st_time.tm_sec)
+            return delta.seconds
 
         return 0
 

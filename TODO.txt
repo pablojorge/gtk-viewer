@@ -10,7 +10,6 @@ Enhancements:
  - Application name and icon
 
 Features:
- - Show images metadata
  - Integrate metadata manipulation for MP3s/PDFs/EPubs (show, edit, autogen)
  - Undo pane
  - Log pane

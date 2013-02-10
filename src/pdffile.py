@@ -1,11 +1,12 @@
 import os
 import glob
+import string
 import tempfile
 import pexpect
 
 import gtk
 
-from imagefile import ImageFile
+from imagefile import ImageFile, GTKIconImage
 from cache import Cache, cached
 from system import execute
 
@@ -15,13 +16,20 @@ class PDFFile(ImageFile):
     pixbuf_cache = Cache(10)
 
     @cached()
-    def get_pages(self):
+    def get_metadata(self):
+        info = [("Property", "Value")]
         output = execute(["pdfinfo", self.get_filename()], check_retcode=False)
-        for line in output.split("\n"):
-            tokens = filter(lambda x: x, line.split(" "))
-            if tokens[0].startswith("Pages:"):
-                return int(tokens[1])
-        return 0
+        for line in filter(lambda x: x, output.split("\n")):
+            tokens = map(string.strip, line.split(":"))
+            info.append((tokens[0], string.join(tokens[1:], "")))
+        return info
+
+    @cached()
+    def get_pages(self):
+        try: 
+            return int(dict(self.get_metadata()).get("Pages", "0"))
+        except KeyError:
+            return 0
 
     @cached(pixbuf_cache)
     def get_pixbuf(self):
@@ -41,7 +49,7 @@ class PDFFile(ImageFile):
                 continue
 
         print "Warning: unable to preview PDF file '%s'" % self.get_basename()
-        return self.get_empty_pixbuf()
+        return GTKIconImage(gtk.STOCK_MISSING_IMAGE, 256).get_pixbuf()
 
     def get_sha1(self):
         # avoiding this for PDF files

@@ -1,5 +1,6 @@
 import os
 import sys
+import string
 import tempfile
 import shutil
 import cgi
@@ -12,7 +13,7 @@ from gallery import GalleryViewer
 from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
                      RenameDialog, DirectorySelectorDialog)
 from dialogs import (InfoDialog, ErrorDialog, AboutDialog, TextEntryDialog, 
-                     ProgressBarDialog)
+                     ProgressBarDialog, TabbedInfoDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 
@@ -607,6 +608,9 @@ class ViewerApp:
                              "accel" : "K",
                              "handler" : self.on_delete_current},
                             {"separator" : True},
+                            {"stock" : gtk.STOCK_INFO,
+                             "accel" : (gtk.keysyms.comma, 0),
+                             "handler" : self.on_show_info},
                             {"text" : "Open in external viewer",
                              "accel" : "X",
                              "handler" : self.on_external_open},
@@ -805,7 +809,11 @@ class ViewerApp:
                                                   pinbar_assoc(6), pinbar_assoc(7), 
                                                   pinbar_assoc(8), pinbar_assoc(9)]}}]},
                 {"text" : "_Help",
-                 "items" : [{"stock" : gtk.STOCK_ABOUT,
+                 "items" : [{"text" : "See commands reference",
+                             "accel" : (gtk.keysyms.question, 0),
+                             "handler" : self.on_show_commands_reference},
+                            {"separator" : True},
+                            {"stock" : gtk.STOCK_ABOUT,
                              "handler" : self.on_show_about}]}]
 
     def build_toolbar(self, widget_manager):
@@ -859,6 +867,11 @@ class ViewerApp:
         toolbar.insert(button, -1)
 
         toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        button = gtk.ToolButton(gtk.STOCK_INFO)
+        button.connect("clicked", self.on_show_info)
+        button.set_tooltip(tooltips, "Show information")
+        toolbar.insert(button, -1)
 
         button = gtk.ToolButton(gtk.STOCK_EXECUTE)
         button.connect("clicked", self.on_external_open)
@@ -1313,6 +1326,17 @@ class ViewerApp:
         about = AboutDialog(self.window)
         about.show()
 
+    def on_show_commands_reference(self, _):
+        info = []
+
+        root_path = os.path.split(os.path.dirname(__file__))[0]
+        with open(os.path.join(root_path, "accelerators.txt")) as input_:
+            for line in input_.readlines():
+                info.append(map(string.strip, line.split(":")))
+
+        dialog = TabbedInfoDialog(self.window, info)
+        dialog.show()
+
     def on_toggle_fullscreen(self, toggle):
         if toggle.get_active():
             self.window.fullscreen()
@@ -1563,6 +1587,17 @@ class ViewerApp:
     def on_hide_all_status(self, _):
         self.toggle_all_status(False)
         self.file_manager.apply_filter(self.filter_)
+
+    def on_show_info(self, _):
+        current_file = self.file_manager.get_current_file()
+        metadata = current_file.get_metadata()
+
+        if not metadata:
+            ErrorDialog(self.window, "Error: No information available").run()
+            return
+
+        dialog = TabbedInfoDialog(self.window, metadata)
+        dialog.show()
 
     def on_external_open(self, _):
         current_file = self.file_manager.get_current_file()
