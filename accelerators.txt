@@ -4,10 +4,11 @@ B: select base dir
 C: show status bar
 D: sort by date
 E: extract contents
-F: flip horizontal
+F: toggle filter bar
 C-F: flip vertical
 G: gif animation on/off
 H: goto first
+C-H: flip horizontal
 I: invert sort order
 J: jump to
 K: delete

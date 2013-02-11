@@ -6,7 +6,7 @@ from xml.dom import minidom
 import gtk
 import gio
 
-from imagefile import ImageFile
+from imagefile import ImageFile, GTKIconImage
 from cache import Cache, cached
 
 class EPUBFile(ImageFile):
@@ -23,7 +23,7 @@ class EPUBFile(ImageFile):
             return gtk.gdk.pixbuf_new_from_stream(stream)
         else:
             print "Warning: unable to preview EPUB file '%s'" % self.get_basename()
-            return self.get_empty_pixbuf()
+            return GTKIconImage(gtk.STOCK_MISSING_IMAGE, 256).get_pixbuf()
 
     def get_cover(self):
         epub = zipfile.ZipFile(self.filename, "r")

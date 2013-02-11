@@ -493,12 +493,17 @@ class ViewerApp:
         self.menu_bar = factory.get_menu_bar(self.window, self.widget_manager, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
+        self.load_icons() # load icons before creating toolbars
+
         # Toolbar
-        self.load_icons() # load icons first
         self.toolbar = self.build_toolbar(self.widget_manager)
         vbox.pack_start(self.toolbar, False, False, 0)
 
-        # Pinbar (pack it AFTER the toolbar)
+        # Filter toolbar
+        self.filterbar = self.build_filterbar(self.widget_manager)
+        vbox.pack_start(self.filterbar, False, False, 0)
+
+        # Pinbar (pack it AFTER the toolbars)
         vbox.pack_start(self.pinbar.get_widget(), False, False, 0)
 
         # Viewer hbox
@@ -586,7 +591,9 @@ class ViewerApp:
         # Show main window AFTER obtaining file list
         self.window.show_all()
         self.window.set_focus(None)
-        self.pinbar.hide() # But initially hide the pinbar
+        # But initially hide the filter bar and pinbar
+        self.filterbar.hide()
+        self.pinbar.hide()
 
     def get_menubar_entries(self, pinbar):
         pinbar_send = lambda i: {"text" : "Bucket %i" % ((i+1)%10),
@@ -696,13 +703,18 @@ class ViewerApp:
                              "handler" : self.on_rotate_cc},
                             {"separator" : True},
                             {"text" : "Flip horizontal",
-                             "accel" : "F",
+                             "accel" : "<Control>H",
                              "handler" : self.on_flip_horizontal},
                             {"text" : "Flip vertical",
                              "accel" : "<Control>F",
                              "handler" : self.on_flip_vertical}]},
                 {"text" : "Fi_lter",
-                 "items" : [{"toggle" : "Show images",
+                 "items" : [{"toggle" : "Show filter bar",
+                             "accel" : "F",
+                             "key" : "filterbar_toggle",
+                             "handler" : self.on_show_filterbar},
+                            {"separator" : True},
+                            {"toggle" : "Show images",
                              "key" : "filter_images_toggle",
                              "active" : True,
                              "handler" : self.on_filetype_toggle},
@@ -997,6 +1009,71 @@ class ViewerApp:
 
         return toolbar
 
+    def build_filterbar(self, widget_manager):
+        toolbar = gtk.Toolbar()
+        toolbar.set_style(gtk.TOOLBAR_BOTH_HORIZ)
+
+        tooltips = gtk.Tooltips()
+        toolbar.set_tooltips(True)
+
+        for stock_id, text, key in [("image-file", "Images", "images"),
+                                    ("video-file", "Videos", "videos"),
+                                    ("gif-file", "GIFs", "gifs"),
+                                    ("pdf-file", "PDFs", "pdfs"),
+                                    ("epub-file", "EPUBs", "epubs"),
+                                    ("archive", "Archives", "archives")]:
+            button = gtk.ToggleToolButton(stock_id)
+            button.set_active(True)
+            button.set_is_important(True)
+            handler_id = button.connect("clicked", self.on_filetype_toggle)
+            button.set_label(text)
+            button.set_tooltip(tooltips, text)
+            widget_manager.add_widget("filter_%s_button" % key, button, handler_id)
+            toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_OK)
+        button.set_is_important(True)
+        button.set_label("All")
+        handler_id = button.connect("clicked", self.on_show_all_filetypes)
+        button.set_tooltip(tooltips, "Show all filetypes")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_CANCEL)
+        button.set_is_important(True)
+        button.set_label("None")
+        handler_id = button.connect("clicked", self.on_hide_all_filetypes)
+        button.set_tooltip(tooltips, "Hide all filetypes")
+        toolbar.insert(button, -1)
+
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+        
+        for stock_id, text, key in [(gtk.STOCK_ABOUT, "Starreds", "starred"),
+                                    ("unstarred", "Unstarreds", "unstarred")]:
+            button = gtk.ToggleToolButton(stock_id)
+            button.set_active(True)
+            button.set_is_important(True)
+            handler_id = button.connect("clicked", self.on_status_toggle)
+            button.set_label(text)
+            button.set_tooltip(tooltips, text)
+            widget_manager.add_widget("filter_%s_button" % key, button, handler_id)
+            toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_OK)
+        button.set_is_important(True)
+        button.set_label("All")
+        handler_id = button.connect("clicked", self.on_show_all_status)
+        button.set_tooltip(tooltips, "Show all statuses")
+        toolbar.insert(button, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_CANCEL)
+        button.set_is_important(True)
+        button.set_label("None")
+        handler_id = button.connect("clicked", self.on_hide_all_status)
+        button.set_tooltip(tooltips, "Hide all statuses")
+        toolbar.insert(button, -1)
+
+        return toolbar
+
     def load_icons(self):
         factory = gtk.IconFactory()
 
@@ -1006,7 +1083,14 @@ class ViewerApp:
                  ("flip-vertical", "icons/flip-vertical.png"),
                  ("sort-by-date", "icons/sort-by-date.png"),
                  ("sort-ascending", "icons/sort-ascending.png"),
-                 ("sort-descending", "icons/sort-descending.png")]
+                 ("sort-descending", "icons/sort-descending.png"),
+                 ("image-file", "icons/image-file.png"),
+                 ("video-file", "icons/video-file.png"),
+                 ("gif-file", "icons/gif-file.png"),
+                 ("pdf-file", "icons/pdf-file.png"),
+                 ("epub-file", "icons/epub-file.png"),
+                 ("archive", "icons/archive.png"),
+                 ("unstarred", "icons/unstarred.png")]
 
         root_path = os.path.split(os.path.dirname(__file__))[0]
 
@@ -1032,15 +1116,17 @@ class ViewerApp:
     def toggle_all_filetypes(self, value):
         for filetype in self.filter_.get_valid_filetypes():
             toggle_id = "filter_%s_toggle" % filetype
-            with self.widget_manager.get_blocked(toggle_id) as filetype_toggle:
-                filetype_toggle.set_active(value)
+            button_id = "filter_%s_button" % filetype
+            self.widget_manager.set_active(toggle_id, value)
+            self.widget_manager.set_active(button_id, value)
             self.filter_.enable_filetype(filetype, value)
 
     def toggle_all_status(self, value):
         for status in self.filter_.get_valid_status():
             toggle_id = "filter_%s_toggle" % status
-            with self.widget_manager.get_blocked(toggle_id) as status_toggle:
-                status_toggle.set_active(value)
+            button_id = "filter_%s_button" % status
+            self.widget_manager.set_active(toggle_id, value)
+            self.widget_manager.set_active(button_id, value)
             self.filter_.enable_status(status, value)
 
     ## Gtk event handlers
@@ -1349,6 +1435,7 @@ class ViewerApp:
     def on_toggle_fullview(self, _):
         fullscreen_on = self.widget_manager.get("fullscreen_toggle").active
         toolbar_on = self.widget_manager.get("toolbar_toggle").active
+        filterbar_on = self.widget_manager.get("filterbar_toggle").active
         pinbar_on = self.widget_manager.get("pinbar_toggle").active
         thumbnails_on = self.widget_manager.get("thumbnails_toggle").active
         status_bar_on = self.widget_manager.get("status_bar_toggle").active
@@ -1358,6 +1445,7 @@ class ViewerApp:
                 self.window.fullscreen()
             self.menu_bar.hide()
             self.toolbar.hide()
+            self.filterbar.hide()
             self.pinbar.hide()
             self.go_back_icon.hide()
             self.go_forward_icon.hide()
@@ -1372,6 +1460,8 @@ class ViewerApp:
             self.menu_bar.show()
             if toolbar_on:
                 self.toolbar.show()
+            if filterbar_on:
+                self.filterbar.show()
             if pinbar_on:
                 self.pinbar.show()
             self.go_back_icon.show()
@@ -1403,6 +1493,12 @@ class ViewerApp:
             self.status_bar.show()
         else:
             self.status_bar.hide()
+
+    def on_show_filterbar(self, toggle):
+        if toggle.active:
+            self.filterbar.show()
+        else:
+            self.filterbar.hide()
 
     def on_show_pinbar(self, toggle):
         if toggle.active:
@@ -1552,24 +1648,34 @@ class ViewerApp:
 
         self.reorder_files()
 
-    def on_filetype_toggle(self, toggle):
+    def on_filetype_toggle(self, widget):
         for filetype in self.filter_.get_valid_filetypes():
+            button_id = "filter_%s_button" % filetype
             toggle_id = "filter_%s_toggle" % filetype
-            if toggle is self.widget_manager.get(toggle_id):
+            if widget is self.widget_manager.get(toggle_id):
+                self.widget_manager.set_active(button_id, widget.get_active())
+                break
+            if widget is self.widget_manager.get(button_id):
+                self.widget_manager.set_active(toggle_id, widget.get_active())
                 break
 
         # update the filter to match the toggle state:
-        self.filter_.enable_filetype(filetype, toggle.get_active())
+        self.filter_.enable_filetype(filetype, widget.get_active())
         self.file_manager.apply_filter(self.filter_)
 
-    def on_status_toggle(self, toggle):
+    def on_status_toggle(self, widget):
         for status in self.filter_.get_valid_status():
+            button_id = "filter_%s_button" % status
             toggle_id = "filter_%s_toggle" % status
-            if toggle is self.widget_manager.get(toggle_id):
+            if widget is self.widget_manager.get(toggle_id):
+                self.widget_manager.set_active(button_id, widget.get_active())
+                break
+            if widget is self.widget_manager.get(button_id):
+                self.widget_manager.set_active(toggle_id, widget.get_active())
                 break
 
         # update the filter to match the toggle state:
-        self.filter_.enable_status(status, toggle.get_active())
+        self.filter_.enable_status(status, widget.get_active())
         self.file_manager.apply_filter(self.filter_)
 
     def on_show_all_filetypes(self, _):
@@ -1635,7 +1741,7 @@ class ViewerApp:
             dialog.destroy()
             # Run a separate instance of the viewer on this dir:
             main_py = os.path.join(os.path.dirname(__file__), "main.py")
-            execute([sys.executable, main_py, tmp_dir])
+            execute([sys.executable, main_py, "-r", tmp_dir])
         finally:
             shutil.rmtree(tmp_dir)
 
