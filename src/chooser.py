@@ -45,7 +45,7 @@ class FileSelectorDialogGTK:
         img_filter = gtk.FileFilter()
         img_filter.set_name("All supported files")
         img_filter.add_pixbuf_formats()
-        for ext in (ArchiveFile.valid_extensions,
+        for ext in (ArchiveFile.valid_extensions +
                     PDFFile.valid_extensions +
                     EPUBFile.valid_extensions +
                     VideoFile.valid_extensions):
