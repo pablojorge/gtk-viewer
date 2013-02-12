@@ -464,7 +464,6 @@ class ViewerApp:
 
         self.files_order = None
         self.base_dir = base_dir
-        self.last_opened_file = None
         self.last_targets = []
         self.undo_stack = UndoStack(self.on_undo_stack_push, 
                                     self.on_undo_stack_empty)
@@ -1195,12 +1194,20 @@ class ViewerApp:
         self.refresh_info()
 
     def on_file_selected(self, filename):
-        self.last_opened_file = filename
         self.clear_filters()
+        self.last_targets = []
         scanner = FileScanner()
         files = scanner.get_files_from_filename(filename)
         self.undo_stack.clear()
         self.set_files(files, filename)
+
+    def on_dir_selected(self, dirname, recursive):
+        self.clear_filters()
+        self.last_targets = []
+        scanner = FileScanner(recursive=recursive)
+        files, start_file = scanner.get_files_from_args([dirname])
+        self.undo_stack.clear()
+        self.set_files(files, start_file)
 
     def on_new_name_selected(self, new_name):
         if os.path.isfile(new_name):
@@ -1558,7 +1565,7 @@ class ViewerApp:
 
     def on_open_file(self, _):
         initial_dir = self.file_manager.get_current_file().get_dirname()
-        open_dialog = OpenDialog(self.window, initial_dir, self.on_file_selected)
+        open_dialog = OpenDialog(self.window, initial_dir, self.on_file_selected, self.on_dir_selected)
         open_dialog.run()
 
     def on_rename_current(self, _):

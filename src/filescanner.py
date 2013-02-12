@@ -70,7 +70,7 @@ class FileFilter:
 
         for filetype in self.allowed_filetypes:
             for extension in valid_extensions[filetype]:
-                if ("." + extension) in filename.lower():
+                if filename.lower().endswith("." + extension):
                     return True
 
         return False

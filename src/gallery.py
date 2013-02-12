@@ -125,7 +125,7 @@ class SelectorListStoreBuilder:
         self.liststore_cache[key] = self.items, self.liststore
 
 class GallerySelector:
-    def __init__(self, title, parent, dirname, last_targets, callback,
+    def __init__(self, title, parent, dirname, last_targets, on_file_selected, on_dir_selected,
                        dir_selector = False,
                        columns = 3,
                        thumb_size = 256,
@@ -133,7 +133,9 @@ class GallerySelector:
                        width = 600,
                        height = 600,
                        quick_width = 300):
-        self.callback = callback
+        self.on_file_selected_cb = on_file_selected
+        self.on_dir_selected_cb = on_dir_selected
+
         self.dir_selector = dir_selector
         self.thumb_size = thumb_size
 
@@ -289,6 +291,11 @@ class GallerySelector:
         button.connect("clicked", self.on_cancel_clicked)
         buttonbar.pack_end(button, False, False, 0)
 
+        self.recursive_check = gtk.CheckButton(label="Recursive")
+        self.recursive_check.set_active(False)
+        self.recursive_check.set_sensitive(not dir_selector)
+        buttonbar.pack_end(self.recursive_check, False, False, 0)
+
         vbox.pack_start(buttonbar, False, False, 5)
 
         # Enable icons in buttons:
@@ -399,9 +406,8 @@ class GallerySelector:
 
     def on_filter_entry_activate(self, entry):
         if (not entry.get_text() and 
-            not self.last_filter and 
-            self.dir_selector):
-            self.callback(self.curdir)
+            not self.last_filter):
+            self.on_dir_selected_cb(self.curdir, self.recursive_check.get_active())
             self.close()
             return
 
@@ -426,7 +432,9 @@ class GallerySelector:
         item.on_selected(self)
         
     def on_image_selected(self, item):
-        self.callback(item.get_filename())
+        if self.dir_selector:
+            return
+        self.on_file_selected_cb(item.get_filename())
         self.close()
 
     def on_dir_selected(self, item):
@@ -434,7 +442,7 @@ class GallerySelector:
         dirs = scanner.get_dirs_from_dir(item)
 
         if self.dir_selector and not dirs:
-            self.callback(item)
+            self.on_dir_selected_cb(item, self.recursive_check.get_active())
             self.close()
             return
 
@@ -446,9 +454,7 @@ class GallerySelector:
         self.filter_entry.grab_focus()
 
     def on_ok_clicked(self, button):
-        if not self.dir_selector:
-            return
-        self.callback(self.curdir)
+        self.on_dir_selected_cb(self.curdir, self.recursive_check.get_active())
         self.close()
         
     def on_cancel_clicked(self, button):
