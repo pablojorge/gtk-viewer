@@ -1243,6 +1243,21 @@ class ViewerApp:
         self.update_target(target_dir)
         self.undo_stack.push(self.file_manager.move_current(target_dir))
 
+    def apply_filter(self):
+        dialog = ProgressBarDialog(self.window, "Applying filter...")
+        dialog.show()
+        updater = Updater(self.file_manager.apply_filter(self.filter_),
+                          dialog.update,
+                          self.on_filter_applied,
+                          (dialog,))
+        updater.start()
+
+    def on_filter_applied(self, dialog):
+        try:
+            dialog.destroy()
+        finally:
+            pass
+
     def reload_viewer(self):
         current_file = self.file_manager.get_current_file()
         current_file.set_anim_enabled(False)
@@ -1668,7 +1683,7 @@ class ViewerApp:
 
         # update the filter to match the toggle state:
         self.filter_.enable_filetype(filetype, widget.get_active())
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_status_toggle(self, widget):
         for status in self.filter_.get_valid_status():
@@ -1683,23 +1698,23 @@ class ViewerApp:
 
         # update the filter to match the toggle state:
         self.filter_.enable_status(status, widget.get_active())
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_show_all_filetypes(self, _):
         self.toggle_all_filetypes(True)
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_hide_all_filetypes(self, _):
         self.toggle_all_filetypes(False)
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_show_all_status(self, _):
         self.toggle_all_status(True)
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_hide_all_status(self, _):
         self.toggle_all_status(False)
-        self.file_manager.apply_filter(self.filter_)
+        self.apply_filter()
 
     def on_show_info(self, _):
         current_file = self.file_manager.get_current_file()

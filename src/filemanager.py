@@ -69,7 +69,12 @@ class FileList:
         self.actual = sorted(self.actual, key=key, reverse=reverse)
 
     def apply_filter(self, filter_):
-        self.actual = filter(filter_.allowed, self.files)
+        self.actual = []
+        total = float(len(self.files))
+        for index, file_ in enumerate(self.files):
+            yield index / total
+            if filter_.allowed(file_):
+                self.actual.append(file_)
 
 class FileManager:
     def __init__(self, on_list_modified=lambda: None):
@@ -292,7 +297,8 @@ class FileManager:
         current = self.get_current_file()
         filename = current.get_filename()
 
-        self.filelist.apply_filter(filter_)
+        for progress in self.filelist.apply_filter(filter_):
+            yield progress
 
         if filter_.allowed(current):
             self.index = self.filelist.find(filename)
