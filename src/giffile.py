@@ -67,3 +67,28 @@ class GIFFile(ImageFile):
 
     def can_be_extracted(self):
         return True
+
+class GIFGenerator:
+    def generate(self, files, output, geometry, colors, delay):
+        try:
+            child = pexpect.spawn("convert", ["-verbose",
+                                              "-geometry", str(geometry),
+                                              "-colors", str(colors),
+                                              "-delay", str(delay)] +
+                                              files + 
+                                              [output])
+            while True:
+                try:
+                    child.expect("\=\>" + output, 0.2)
+                except pexpect.TIMEOUT:
+                    pass
+                yield None
+        except pexpect.EOF:
+            pass
+        except Exception, e:
+            print "Warning:", e
+
+    def get_args(self):
+        return [("Geometry", str, "geometry", "640x480"),
+                ("Colors", int, "colors", 32),
+                ("Delay", int, "delay", 4)]

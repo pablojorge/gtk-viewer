@@ -167,13 +167,13 @@ class GallerySelector:
 
         for home_dir in ["Downloads", "Documents", "Pictures", 
                          "Videos", "Dropbox", "Torrents"]:
-            dirname = os.path.join(home, home_dir)
-            if not os.path.isdir(dirname):
+            path = os.path.join(home, home_dir)
+            if not os.path.isdir(path):
                 continue
-            thumb = DirectoryThumbnail(dirname) 
+            thumb = DirectoryThumbnail(path) 
             store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
                                                    quick_thumb_size), 
-                          home_dir, dirname))
+                          home_dir, path))
 
         for directory in last_targets:
             thumb = DirectoryThumbnail(directory) 

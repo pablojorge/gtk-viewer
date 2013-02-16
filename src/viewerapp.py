@@ -11,11 +11,13 @@ from imagefile import Size, GTKIconImage
 from filemanager import Action, FileManager
 from gallery import GalleryViewer
 from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
-                     RenameDialog, DirectorySelectorDialog)
+                     RenameDialog, DirectorySelectorDialog, OutputDialog)
 from dialogs import (InfoDialog, ErrorDialog, AboutDialog, TextEntryDialog, 
                      ProgressBarDialog, TabbedInfoDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
+
+from giffile import GIFGenerator
 
 from filescanner import FileFilter, FileScanner
 from system import get_process_memory_usage, execute
@@ -614,6 +616,8 @@ class ViewerApp:
                              "accel" : "K",
                              "handler" : self.on_delete_current},
                             {"separator" : True},
+                            {"text" : "Open in nautilus",
+                             "handler" : self.on_open_in_nautilus},
                             {"stock" : gtk.STOCK_INFO,
                              "accel" : (gtk.keysyms.comma, 0),
                              "handler" : self.on_show_info},
@@ -624,6 +628,9 @@ class ViewerApp:
                              "accel" : "E",
                              "key" : "extract_mitem",
                              "handler" : self.on_extract_contents},
+                            {"menu" : {"text" : "Generate ...",
+                                       "items" : [{"text" : "Animated GIF from set",
+                                                   "handler" : self.on_generate_gif}]}},
                             {"toggle" : "Enable animation",
                              "accel" : "G",
                              "key" : "animation_toggle",
@@ -1406,6 +1413,25 @@ class ViewerApp:
         else:
             assert(False)
 
+    def handle_args(self, args):
+        kw_args = {}
+        for arg, func, key, default in args:
+            dialog = TextEntryDialog(self.window, arg + ":", str(default))
+            value = dialog.run()
+            if value is None:
+                return
+            try:
+                value = func(value)
+            except Exception, e:
+                ErrorDialog(self.window, "Error: " + str(e)).run()
+                return
+            kw_args[key] = value
+        return kw_args
+
+    def execute_viewer(self, args):
+        main_py = os.path.join(os.path.dirname(__file__), "main.py")
+        execute([sys.executable, main_py] + args)
+
     def quit_app(self):
         gtk.Widget.destroy(self.window)
     ##
@@ -1623,6 +1649,10 @@ class ViewerApp:
     def on_delete_current(self, _):
         self.undo_stack.push(self.file_manager.delete_current())
 
+    def on_open_in_nautilus(self, widget):
+        current_file = self.file_manager.get_current_file()
+        execute(["nautilus", current_file.get_filename()])
+
     def on_sort_by_date(self, widget):
         self.files_order = "Date"
 
@@ -1735,18 +1765,7 @@ class ViewerApp:
         current_file = self.file_manager.get_current_file()
 
         # Get special args:
-        kw_args = {}
-        for arg, func, key, default in current_file.get_extract_args():
-            dialog = TextEntryDialog(self.window, arg + ":", str(default))
-            value = dialog.run()
-            if value is None:
-                return
-            try:
-                value = func(value)
-            except Exception, e:
-                ErrorDialog(self.window, "Error: " + str(e)).run()
-                return
-            kw_args[key] = value
+        kw_args = self.handle_args(current_file.get_extract_args())
 
         # Create a temporary dir to hold the contents:
         tmp_dir = tempfile.mkdtemp(suffix="gtk-viewer")
@@ -1762,10 +1781,35 @@ class ViewerApp:
         try:
             dialog.destroy()
             # Run a separate instance of the viewer on this dir:
-            main_py = os.path.join(os.path.dirname(__file__), "main.py")
-            execute([sys.executable, main_py, "-r", tmp_dir])
+            self.execute_viewer(["-r", tmp_dir])
         finally:
             shutil.rmtree(tmp_dir)
+
+    def on_generate_gif(self, _):
+        generator = GIFGenerator()
+        dialog = OutputDialog(self.window, 
+                              lambda filename: self.on_generate_file(generator, 
+                                                                     filename))
+        dialog.run()
+
+    def on_generate_file(self, generator, output):
+        kw_args = self.handle_args(generator.get_args())
+
+        files = map(lambda f: f.get_filename(),
+                    self.file_manager.get_files())
+
+        dialog = ProgressBarDialog(self.window, "Generating file...")
+        dialog.show()
+        updater = Updater(generator.generate(files, output, **kw_args),
+                          dialog.update,
+                          self.on_generation_finished,
+                          (output, dialog))
+        updater.start()
+
+    def on_generation_finished(self, output, dialog):
+        dialog.destroy()
+        # Open the output file in a separate instance of the viewer:
+        self.execute_viewer([output])
 
     def on_enable_animation(self, toggle):
         self.widget_manager.set_active("animation_toggle", toggle.get_active())

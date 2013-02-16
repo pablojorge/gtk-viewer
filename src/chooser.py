@@ -15,18 +15,11 @@ class FileSelectorDialogGTK:
     def __init__(self, title, initial_dir, initial_filename, callback):
         self.callback = callback
 
-        if initial_filename:
-            action = gtk.FILE_CHOOSER_ACTION_SAVE
-            button = gtk.STOCK_SAVE
-        else:
-            action = gtk.FILE_CHOOSER_ACTION_OPEN
-            button = gtk.STOCK_OPEN
-
         self.chooser = gtk.FileChooserDialog(title=title,
-                                             action=action,
+                                             action=gtk.FILE_CHOOSER_ACTION_SAVE,
                                              buttons=(gtk.STOCK_CANCEL, 
                                                       gtk.RESPONSE_CANCEL,
-                                                      button,
+                                                      gtk.STOCK_SAVE,
                                                       gtk.RESPONSE_OK))
 
         if initial_dir:
@@ -143,5 +136,12 @@ class RenameDialog(FileSelectorDialogGTK):
         FileSelectorDialogGTK.__init__(self, title="Select new name", 
                                              initial_dir=None,
                                              initial_filename=initial_filename, 
+                                             callback=callback)
+
+class OutputDialog(FileSelectorDialogGTK):
+    def __init__(self, parent, callback):
+        FileSelectorDialogGTK.__init__(self, title="Select output filename", 
+                                             initial_dir=None,
+                                             initial_filename=None, 
                                              callback=callback)
 
