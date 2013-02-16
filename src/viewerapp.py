@@ -18,6 +18,7 @@ from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 
 from giffile import GIFGenerator
+from pdffile import PDFGenerator
 
 from filescanner import FileFilter, FileScanner
 from system import get_process_memory_usage, execute
@@ -630,7 +631,9 @@ class ViewerApp:
                              "handler" : self.on_extract_contents},
                             {"menu" : {"text" : "Generate ...",
                                        "items" : [{"text" : "Animated GIF from set",
-                                                   "handler" : self.on_generate_gif}]}},
+                                                   "handler" : self.on_generate_gif},
+                                                  {"text" : "PDF from set",
+                                                   "handler" : self.on_generate_pdf}]}},
                             {"toggle" : "Enable animation",
                              "accel" : "G",
                              "key" : "animation_toggle",
@@ -1787,6 +1790,13 @@ class ViewerApp:
 
     def on_generate_gif(self, _):
         generator = GIFGenerator()
+        dialog = OutputDialog(self.window, 
+                              lambda filename: self.on_generate_file(generator, 
+                                                                     filename))
+        dialog.run()
+
+    def on_generate_pdf(self, _):
+        generator = PDFGenerator()
         dialog = OutputDialog(self.window, 
                               lambda filename: self.on_generate_file(generator, 
                                                                      filename))

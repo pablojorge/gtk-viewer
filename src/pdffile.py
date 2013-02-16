@@ -73,3 +73,22 @@ class PDFFile(ImageFile):
     def can_be_extracted(self):
         return True
 
+class PDFGenerator:
+    def generate(self, files, output):
+        try:
+            child = pexpect.spawn("convert", ["-verbose"] +
+                                              files + 
+                                              [output])
+            while True:
+                try:
+                    child.expect("\=\>" + output, 0.2)
+                except pexpect.TIMEOUT:
+                    pass
+                yield None
+        except pexpect.EOF:
+            pass
+        except Exception, e:
+            print "Warning:", e
+
+    def get_args(self):
+        return []
