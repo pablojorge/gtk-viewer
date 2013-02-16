@@ -1736,17 +1736,17 @@ class ViewerApp:
 
         # Get special args:
         kw_args = {}
-        for arg, type_, key, default in current_file.get_extract_args():
+        for arg, func, key, default in current_file.get_extract_args():
             dialog = TextEntryDialog(self.window, arg + ":", str(default))
             value = dialog.run()
             if value is None:
                 return
             try:
-                value = type_(value)
+                value = func(value)
             except Exception, e:
                 ErrorDialog(self.window, "Error: " + str(e)).run()
                 return
-            kw_args[key] = type_(value)
+            kw_args[key] = value
 
         # Create a temporary dir to hold the contents:
         tmp_dir = tempfile.mkdtemp(suffix="gtk-viewer")

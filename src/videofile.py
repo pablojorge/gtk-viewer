@@ -35,16 +35,22 @@ class VideoFile(ImageFile):
             info.append((tokens[0], string.join(tokens[1:], ":")))
         return info
 
-    @cached()
-    def get_duration(self):
-        metadata = dict(self.get_metadata())
-        if metadata.has_key("Duration"):
-            duration = metadata["Duration"]
+    @staticmethod
+    def parse_duration(duration):
+        try:
             st_time = time.strptime(duration.split(".")[0], "%H:%M:%S")
             delta = datetime.timedelta(hours=st_time.tm_hour,
                                        minutes=st_time.tm_min,
                                        seconds=st_time.tm_sec)
             return delta.seconds
+        except:
+            return int(duration)
+
+    @cached()
+    def get_duration(self):
+        metadata = dict(self.get_metadata())
+        if metadata.has_key("Duration"):
+            return self.parse_duration(metadata["Duration"])
 
         return 0
 
@@ -81,17 +87,20 @@ class VideoFile(ImageFile):
         return "Duration: %s (%d seconds)" % (datetime.timedelta(seconds=self.get_duration()),
                                               self.get_duration())
 
-    def extract_frames(self, offset, rate, tmp_dir):
+    def extract_frames(self, offset, rate, count, tmp_dir):
         time_placeholder = "__TIME__"
         pattern = os.path.join(tmp_dir, "%s-%%06d%s.jpg" % (self.get_basename(), 
                                                             time_placeholder))
 
         # Extract the frames:
         try:
+            if not count:
+                count = (self.get_duration()-offset) * rate
             child = pexpect.spawn("ffmpeg", ["-ss", str(offset), 
                                              "-i", self.get_filename(), 
                                              "-r", str(rate), 
                                              "-qscale", "1", 
+                                             "-vframes", str(count),
                                              pattern])
             first = True
             while True:
@@ -99,7 +108,7 @@ class VideoFile(ImageFile):
                 if not first:
                     tokens = filter(lambda x:x, child.before.split(" "))
                     frame = str(tokens[0])
-                    yield float(frame) / (self.get_duration() * rate)
+                    yield float(frame) / count
                 else:
                     first = False
         except pexpect.EOF:
@@ -113,7 +122,7 @@ class VideoFile(ImageFile):
                 index = filename.rindex(time_placeholder)
                 frame = float(filename[index-6:index])-1
 
-                time_ = frame / rate
+                time_ = (frame / rate) + offset
                 hours, remainder = divmod(time_, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 microseconds = (frame % rate) * ((10**6) * round(1.0/rate, 2))
@@ -124,14 +133,17 @@ class VideoFile(ImageFile):
         except Exception, e:
             print "Warning:", e
 
-    def extract_contents(self, tmp_dir, rate):
-        return self.extract_frames(offset=0,
+    def extract_contents(self, tmp_dir, offset, rate, count):
+        return self.extract_frames(offset=offset,
                                    rate=rate,
+                                   count=count,
                                    tmp_dir=tmp_dir)
 
     def can_be_extracted(self):
         return True
 
     def get_extract_args(self):
-        return [("Frame rate", float, "rate", 1)]
+        return [("Offset", self.parse_duration, "offset", 0),
+                ("Frame rate", float, "rate", 1.0),
+                ("Frame count", int, "count", 0)]
 

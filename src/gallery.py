@@ -129,7 +129,7 @@ class GallerySelector:
                        dir_selector = False,
                        columns = 3,
                        thumb_size = 256,
-                       quick_thumb_size = 48,
+                       quick_thumb_size = 32,
                        width = 600,
                        height = 600,
                        quick_width = 300):
@@ -165,17 +165,15 @@ class GallerySelector:
         store.append((GTKIconImage(gtk.STOCK_HOME, quick_thumb_size).get_pixbuf(), 
                       "Home", home))
 
-        downloads = os.path.join(home, "Downloads")
-        thumb = DirectoryThumbnail(downloads) 
-        store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
-                                               quick_thumb_size), 
-                      "Downloads", downloads))
-
-        pictures = os.path.join(home, "Pictures")
-        thumb = DirectoryThumbnail(pictures) 
-        store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
-                                               quick_thumb_size), 
-                      "Pictures", pictures))
+        for home_dir in ["Downloads", "Documents", "Pictures", 
+                         "Videos", "Dropbox", "Torrents"]:
+            dirname = os.path.join(home, home_dir)
+            if not os.path.isdir(dirname):
+                continue
+            thumb = DirectoryThumbnail(dirname) 
+            store.append((thumb.get_pixbuf_at_size(quick_thumb_size, 
+                                                   quick_thumb_size), 
+                          home_dir, dirname))
 
         for directory in last_targets:
             thumb = DirectoryThumbnail(directory) 
