@@ -79,7 +79,7 @@ class GIFGenerator:
                                               [output])
             while True:
                 try:
-                    child.expect("\=\>" + output, 0.2)
+                    child.expect("\=\>" + output, 0.1)
                 except pexpect.TIMEOUT:
                     pass
                 yield None

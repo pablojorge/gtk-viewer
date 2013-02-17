@@ -61,7 +61,7 @@ class PDFFile(ImageFile):
             child = pexpect.spawn("pdfimages", ["-j", self.get_filename(), tmp_root])
             while True:
                 try:
-                    child.expect("", 0)
+                    child.expect("", 0.1)
                 except pexpect.TIMEOUT:
                     pass
                 yield None
@@ -81,7 +81,7 @@ class PDFGenerator:
                                               [output])
             while True:
                 try:
-                    child.expect("\=\>" + output, 0.2)
+                    child.expect("\=\>" + output, 0.1)
                 except pexpect.TIMEOUT:
                     pass
                 yield None

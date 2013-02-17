@@ -143,7 +143,7 @@ class ProgressBarDialog:
             self.start = time.time()
 
         if fraction is None:
-            elapsed = datetime.timedelta(seconds=time.time() - self.start)
+            elapsed = datetime.timedelta(seconds=int(time.time() - self.start))
             self.progressbar.set_text("Elapsed: %s" % elapsed)
             self.progressbar.pulse()
             return
