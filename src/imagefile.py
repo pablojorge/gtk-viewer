@@ -26,6 +26,9 @@ class ImageDimensions:
     def __str__(self):
         return "%dx%d" % (self.width, self.height)
 
+    def __lt__(self, other):
+        return (self.width * self.height) < (other.width * other.height)
+
 class Size:
     def __init__(self, size):
         self.size = size
