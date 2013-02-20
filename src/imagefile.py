@@ -38,6 +38,9 @@ class Size:
         else:
             return "%.2f Mb" % (self.size/(1024*1024))
 
+    def __lt__(self, other):
+        return self.size < other.size
+
 class Datetime:
     def __init__(self, datetime):
         self.datetime = datetime

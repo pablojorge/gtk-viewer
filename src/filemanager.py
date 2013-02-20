@@ -154,6 +154,12 @@ class FileManager:
                            reverse=reverse)
         self.go_file(filename)
 
+    def sort_by_size(self, reverse):
+        filename = self.get_current_file().get_filename()
+        self.filelist.sort(key=lambda file_: file_.get_filesize(),
+                           reverse=reverse)
+        self.go_file(filename)
+
     def on_dir_changed(self, dirname):
         FileScanner.cache.invalidate(dirname)
 

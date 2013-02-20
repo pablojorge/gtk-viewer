@@ -799,6 +799,9 @@ class ViewerApp:
                                                    "accel" : "D",
                                                    "key" : "sort_by_date_toggle",
                                                    "handler" : self.on_sort_by_date},
+                                                  {"toggle" : "Sort by size",
+                                                   "key" : "sort_by_size_toggle",
+                                                   "handler" : self.on_sort_by_size},
                                                   {"separator" : True},
                                                   {"toggle" : "Inverted order",
                                                    "key" : "inverted_order_toggle",
@@ -1413,6 +1416,8 @@ class ViewerApp:
             self.file_manager.sort_by_date(inverse_order)
         elif self.files_order == "Name":
             self.file_manager.sort_by_name(inverse_order)
+        elif self.files_order == "Size":
+            self.file_manager.sort_by_size(inverse_order)
         else:
             assert(False)
 
@@ -1664,10 +1669,10 @@ class ViewerApp:
 
         for widget_id, active in [("sort_by_date_toggle", True),
                                   ("sort_by_date_button", True),
+                                  ("sort_by_size_toggle", False),
                                   ("sort_by_name_toggle", False),
                                   ("sort_by_name_button", False)]:
-            with self.widget_manager.get_blocked(widget_id) as widget:
-                widget.set_active(active)
+            self.widget_manager.set_active(widget_id, active)
 
         self.reorder_files()
 
@@ -1679,10 +1684,24 @@ class ViewerApp:
 
         for widget_id, active in [("sort_by_name_toggle", True),
                                   ("sort_by_name_button", True),
+                                  ("sort_by_size_toggle", False),
                                   ("sort_by_date_toggle", False),
                                   ("sort_by_date_button", False)]:
-            with self.widget_manager.get_blocked(widget_id) as widget:
-                widget.set_active(active)
+            self.widget_manager.set_active(widget_id, active)
+
+        self.reorder_files()
+
+    def on_sort_by_size(self, widget):
+        self.files_order = "Size"
+
+        self.widget_manager.get("inverted_order_toggle").set_sensitive(True)
+        self.widget_manager.get("inverted_order_button").set_sensitive(True)
+
+        for widget_id, active in [("sort_by_name_toggle", False),
+                                  ("sort_by_name_button", False),
+                                  ("sort_by_date_toggle", False),
+                                  ("sort_by_date_button", False)]:
+            self.widget_manager.set_active(widget_id, active)
 
         self.reorder_files()
 
