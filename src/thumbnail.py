@@ -15,6 +15,12 @@ class DirectoryThumbnail(ImageFile):
         ImageFile.__init__(self, "")
         self.directory = directory
 
+    @cached(cache, key_func=lambda self: ("items_count", self.directory))
+    def get_items_count(self):
+        scanner = FileScanner()
+        return (len(scanner.get_dirs_from_dir(self.directory)),
+                len(scanner.get_files_from_dir(self.directory)))
+
     @cached(cache, key_func=lambda self: ("pixbuf", self.directory))
     def get_pixbuf(self):
         scanner = FileScanner()

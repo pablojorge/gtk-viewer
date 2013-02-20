@@ -23,7 +23,7 @@ class GalleryItem:
     def initial_data(self):
         pass
 
-    def final_thumbnail(self):
+    def final_data(self):
         pass
 
     def on_selected(self, gallery):
@@ -40,9 +40,16 @@ class ImageItem(GalleryItem):
                 self.item.get_filename())
 
     @cached()
-    def final_thumbnail(self):
+    def final_data(self):
         width, height = self.item.get_dimensions_to_fit(self.size, self.size)
-        return self.item.get_pixbuf_at_size(width, height)
+        return (self.item.get_pixbuf_at_size(width, height),
+                "%s\n<span size='small'>%s\n%s</span>" % \
+                    (self.item.get_basename(),
+                     self.item.get_dimensions(),
+                     self.item.get_filesize()),
+                "%s (%s)" % \
+                    (self.item.get_filename(), 
+                     self.item.get_mtime()))
 
     def on_selected(self, gallery):
         gallery.on_image_selected(self.item)
@@ -58,8 +65,12 @@ class DirectoryItem(GalleryItem):
                 os.path.basename(self.item),
                 self.item)
 
-    def final_thumbnail(self):
-        return self.thumbnail.get_pixbuf_at_size(self.size, self.size)
+    def final_data(self):
+        return (self.thumbnail.get_pixbuf_at_size(self.size, self.size),
+                "%s\n<span size='small'>%s</span>" % \
+                    (os.path.basename(self.item),
+                     "%d dirs, %d files" % self.thumbnail.get_items_count()),
+                self.item)
 
     def on_selected(self, gallery):
         gallery.on_dir_selected(self.item)
@@ -75,12 +86,14 @@ class SelectorListStoreBuilder:
 
         self.items = []
         self.liststore = gtk.ListStore(gtk.gdk.Pixbuf, str, str)
+        self.items_count = (None, None)
 
     def get_items_from_dir(self):
         # Obtain the directories first:
         scanner = FileScanner()
+        dirs = scanner.get_dirs_from_dir(self.directory)
 
-        for dir_ in scanner.get_dirs_from_dir(self.directory):
+        for dir_ in dirs:
             if self.filter_ and not self.filter_.lower() in dir_.lower():
                 continue
             yield DirectoryItem(dir_, self.thumb_size/2)
@@ -99,12 +112,14 @@ class SelectorListStoreBuilder:
                 yield ImageItem(current_file, self.thumb_size/2)
             file_manager.go_forward(1)
 
+        self.items_count = (len(dirs), len(files))
+
     def build(self):
         key = (self.directory, self.filter_)
 
         # Try to (manually) get the values from the cache:
         try:
-            self.items, self.liststore = self.liststore_cache[key]
+            self.items, self.liststore, self.items_count = self.liststore_cache[key]
             return
         except KeyError:
             pass
@@ -122,7 +137,7 @@ class SelectorListStoreBuilder:
             yield float(index) / total
 
         # Update the cache with the generated lists:
-        self.liststore_cache[key] = self.items, self.liststore
+        self.liststore_cache[key] = self.items, self.liststore, self.items_count
 
 class GallerySelector:
     def __init__(self, title, parent, dirname, last_targets, on_file_selected, on_dir_selected,
@@ -258,7 +273,7 @@ class GallerySelector:
         # Iconview
         self.iconview = gtk.IconView()
         self.iconview.set_pixbuf_column(0)
-        self.iconview.set_text_column(1)
+        self.iconview.set_markup_column(1)
         self.iconview.set_tooltip_column(2)
         self.iconview.set_selection_mode(gtk.SELECTION_SINGLE)
         self.iconview.set_item_width(self.thumb_size)
@@ -340,17 +355,19 @@ class GallerySelector:
         # Update the curdir entry widget:
         self.location_entry.set_text(self.curdir)
         # Update directory information:
-        self.info_label.set_text("%d items" % len(builder.items))
+        self.info_label.set_text("%d dirs, %d files" % builder.items_count)
 
     # This is done in a separate thread:
     def update_item_thumbnail(self, liststore, index, item):
-        pixbuf = item.final_thumbnail()
-        return (self.update_store_entry, (liststore, index, pixbuf))
+        data = item.final_data()
+        return (self.update_store_entry, (liststore, index, data))
 
     # This is requested to be done by the main thread:
-    def update_store_entry(self, liststore, index, pixbuf):
+    def update_store_entry(self, liststore, index, data):
         iter_ = liststore.get_iter((index,))
-        liststore.set_value(iter_, 0, pixbuf)
+        liststore.set_value(iter_, 0, data[0])
+        liststore.set_value(iter_, 1, data[1])
+        liststore.set_value(iter_, 2, data[2])
 
     def on_key_press_event(self, widget, event, data=None):
         key_name = gtk.gdk.keyval_name(event.keyval)
@@ -513,7 +530,7 @@ class GalleryViewer:
         # Iconview
         self.iconview = gtk.IconView()
         self.iconview.set_pixbuf_column(0)
-        self.iconview.set_text_column(1)
+        self.iconview.set_markup_column(1)
         self.iconview.set_tooltip_column(2)
         self.iconview.set_selection_mode(gtk.SELECTION_SINGLE)
         self.iconview.set_item_width(self.thumb_size)
@@ -565,13 +582,15 @@ class GalleryViewer:
 
     # This is done in a separate thread:
     def update_item_thumbnail(self, liststore, index, item):
-        pixbuf = item.final_thumbnail()
-        return (self.update_store_entry, (liststore, index, pixbuf))
+        data = item.final_data()
+        return (self.update_store_entry, (liststore, index, data))
 
     # This is requested to be done by the main thread:
-    def update_store_entry(self, liststore, index, pixbuf):
+    def update_store_entry(self, liststore, index, data):
         iter_ = liststore.get_iter((index,))
-        liststore.set_value(iter_, 0, pixbuf)
+        liststore.set_value(iter_, 0, data[0])
+        liststore.set_value(iter_, 1, data[1])
+        liststore.set_value(iter_, 2, data[2])
 
     def on_key_press_event(self, widget, event, data=None):
         key_name = gtk.gdk.keyval_name(event.keyval)
