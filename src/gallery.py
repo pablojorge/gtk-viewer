@@ -93,7 +93,9 @@ class SelectorListStoreBuilder:
         scanner = FileScanner()
         dirs = scanner.get_dirs_from_dir(self.directory)
 
-        for dir_ in dirs:
+        for dir_ in sorted(dirs, 
+                           key=lambda dir_: os.stat(dir_).st_mtime, 
+                           reverse=True):
             if self.filter_ and not self.filter_.lower() in dir_.lower():
                 continue
             yield DirectoryItem(dir_, self.thumb_size/2)
