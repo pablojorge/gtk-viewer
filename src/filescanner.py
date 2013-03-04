@@ -1,5 +1,6 @@
 import os
 import glob
+import re
 
 import gtk
 
@@ -18,6 +19,7 @@ class FileFilter:
     def __init__(self):
         self.allowed_filetypes = set(FileFilter.get_valid_filetypes())
         self.allowed_status = set(FileFilter.get_valid_status())
+        self.pattern = ""
 
     def is_filetype_enabled(self, filetype):
         return filetype in self.allowed_filetypes
@@ -36,6 +38,9 @@ class FileFilter:
             self.allowed_status.add(status)
         elif not enable and self.is_status_enabled(status):
             self.allowed_status.remove(status)
+
+    def enable_pattern(self, pattern):
+        self.pattern = pattern
 
     @classmethod
     def get_valid_extensions(cls):
@@ -86,9 +91,14 @@ class FileFilter:
 
         return False
 
+    def matches_pattern(self, filename):
+        return (not self.pattern or not re.search(self.pattern.lower(), 
+                                                  filename.lower()) is None)
+
     def allowed(self, file_):
         return (self.has_allowed_ext(file_.get_filename()) and 
-                self.has_allowed_status(file_))
+                self.has_allowed_status(file_) and
+                self.matches_pattern(file_.get_filename()))
 
 class FileScanner:
     cache = Cache(shared=True)

@@ -239,11 +239,8 @@ class WidgetFactory:
         
         return gitem
 
-    def get_menu_bar(self, window, widget_manager, menus):
+    def get_menu_bar(self, accel_group, widget_manager, menus):
         menu_bar = gtk.MenuBar()
-
-        accel_group = gtk.AccelGroup()
-        window.add_accel_group(accel_group)
 
         for menu in menus:
             menu_bar.append(self.get_menu(menu, widget_manager, accel_group))
@@ -483,6 +480,9 @@ class ViewerApp:
                                          on_destroy=self.on_destroy,
                                          on_key_press_event=self.on_key_press_event)
 
+        self.accel_group = gtk.AccelGroup()
+        self.window.add_accel_group(self.accel_group)
+
         # Main vbox of the window (contains pinbar hbox, viewer hbox and status bar hbox)
         vbox = gtk.VBox(False, 0)
         self.window.add(vbox)
@@ -492,7 +492,7 @@ class ViewerApp:
 
         # Menubar
         menus = self.get_menubar_entries(self.pinbar)
-        self.menu_bar = factory.get_menu_bar(self.window, self.widget_manager, menus)
+        self.menu_bar = factory.get_menu_bar(self.accel_group, self.widget_manager, menus)
         vbox.pack_start(self.menu_bar, False, False, 0)
 
         self.load_icons() # load icons before creating toolbars
@@ -1018,6 +1018,12 @@ class ViewerApp:
         widget_manager.add_widget("sort_by_date_button", button, handler_id)
         toolbar.insert(button, -1)
 
+        button = gtk.ToggleToolButton("sort-by-size")
+        handler_id = button.connect("clicked", self.on_sort_by_size)
+        button.set_tooltip(tooltips, "Sort by size")
+        widget_manager.add_widget("sort_by_size_button", button, handler_id)
+        toolbar.insert(button, -1)
+
         button = gtk.ToolButton("sort-ascending")
         handler_id = button.connect("clicked", self.on_toggle_sort_order)
         button.set_tooltip(tooltips, "Toggle sort order")
@@ -1090,6 +1096,21 @@ class ViewerApp:
         button.set_tooltip(tooltips, "Hide all statuses")
         toolbar.insert(button, -1)
 
+        toolbar.insert(gtk.SeparatorToolItem(), -1)
+
+        item = gtk.ToolItem()
+        entry = gtk.Entry()
+        entry.connect("focus-in-event", self.on_filter_entry_focus_in)
+        entry.connect("focus-out-event", self.on_filter_entry_focus_out)
+        entry.connect("activate", self.on_filter_entry_activate)
+        widget_manager.add_widget("filter_entry", entry, None)
+        item.add(entry)
+        toolbar.insert(item, -1)
+
+        button = gtk.ToolButton(gtk.STOCK_CLEAR)
+        handler_id = button.connect("clicked", self.on_filter_entry_clear)
+        toolbar.insert(button, -1)
+
         return toolbar
 
     def load_icons(self):
@@ -1100,6 +1121,7 @@ class ViewerApp:
                  ("flip-horizontal", "icons/flip-horizontal.png"),
                  ("flip-vertical", "icons/flip-vertical.png"),
                  ("sort-by-date", "icons/sort-by-date.png"),
+                 ("sort-by-size", "icons/sort-by-size.png"),
                  ("sort-ascending", "icons/sort-ascending.png"),
                  ("sort-descending", "icons/sort-descending.png"),
                  ("image-file", "icons/image-file.png"),
@@ -1579,6 +1601,7 @@ class ViewerApp:
     def on_show_filterbar(self, toggle):
         if toggle.active:
             self.filterbar.show()
+            self.window.set_focus(self.widget_manager.get("filter_entry"))
         else:
             self.filterbar.hide()
 
@@ -1724,6 +1747,7 @@ class ViewerApp:
         for widget_id, active in [("sort_by_date_toggle", True),
                                   ("sort_by_date_button", True),
                                   ("sort_by_size_toggle", False),
+                                  ("sort_by_size_button", False),
                                   ("sort_by_dimensions_toggle", False),
                                   ("sort_by_name_toggle", False),
                                   ("sort_by_name_button", False)]:
@@ -1740,6 +1764,7 @@ class ViewerApp:
         for widget_id, active in [("sort_by_name_toggle", True),
                                   ("sort_by_name_button", True),
                                   ("sort_by_size_toggle", False),
+                                  ("sort_by_size_button", False),
                                   ("sort_by_dimensions_toggle", False),
                                   ("sort_by_date_toggle", False),
                                   ("sort_by_date_button", False)]:
@@ -1755,6 +1780,8 @@ class ViewerApp:
 
         for widget_id, active in [("sort_by_name_toggle", False),
                                   ("sort_by_name_button", False),
+                                  ("sort_by_size_toggle", True),
+                                  ("sort_by_size_button", True),
                                   ("sort_by_dimensions_toggle", False),
                                   ("sort_by_date_toggle", False),
                                   ("sort_by_date_button", False)]:
@@ -1771,6 +1798,8 @@ class ViewerApp:
         for widget_id, active in [("sort_by_name_toggle", False),
                                   ("sort_by_name_button", False),
                                   ("sort_by_size_toggle", False),
+                                  ("sort_by_size_button", False),
+                                  ("sort_by_dimensions_toggle", True),
                                   ("sort_by_date_toggle", False),
                                   ("sort_by_date_button", False)]:
             self.widget_manager.set_active(widget_id, active)
@@ -1838,6 +1867,22 @@ class ViewerApp:
 
     def on_hide_all_status(self, _):
         self.toggle_all_status(False)
+        self.apply_filter()
+
+    def on_filter_entry_focus_in(self, widget, _):
+        self.window.remove_accel_group(self.accel_group)
+
+    def on_filter_entry_focus_out(self, widget, _):
+        self.window.add_accel_group(self.accel_group)
+
+    def on_filter_entry_activate(self, entry):
+        self.window.set_focus(None)
+        self.filter_.enable_pattern(entry.get_text())
+        self.apply_filter()
+
+    def on_filter_entry_clear(self, _):
+        self.widget_manager.get("filter_entry").set_text("")
+        self.filter_.enable_pattern("")
         self.apply_filter()
 
     def on_show_info(self, _):
