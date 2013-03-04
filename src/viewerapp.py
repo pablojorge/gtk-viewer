@@ -13,7 +13,7 @@ from gallery import GalleryViewer
 from chooser import (OpenDialog, BasedirSelectorDialog, TargetSelectorDialog, 
                      RenameDialog, DirectorySelectorDialog, OutputDialog)
 from dialogs import (InfoDialog, ErrorDialog, AboutDialog, TextEntryDialog, 
-                     ProgressBarDialog, TabbedInfoDialog)
+                     QuestionDialog, ProgressBarDialog, TabbedInfoDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 
@@ -616,6 +616,9 @@ class ViewerApp:
                             {"stock" : gtk.STOCK_DELETE,
                              "accel" : "K",
                              "handler" : self.on_delete_current},
+                            {"separator" : True},
+                            {"text" : "Mass delete...",
+                             "handler" : self.on_mass_delete},
                             {"separator" : True},
                             {"text" : "Open in nautilus",
                              "handler" : self.on_open_in_nautilus},
@@ -1398,10 +1401,14 @@ class ViewerApp:
             span += ">%s</span>" % last_action.description
             file_info += "\n<i>Last action:</i> " + span
 
+        scanner = FileScanner()
+        files = scanner.get_files_from_dir(image_file.get_dirname())
+
         inverse_order = self.widget_manager.get("inverted_order_toggle").active
-        file_index = "<b><big>%d/%d</big></b>\n<i>Order:</i> %s %s" % \
+        file_index = "<b><big>%d/%d</big></b> (%d)\n<i>Order:</i> %s %s" % \
                      (self.file_manager.get_current_index() + 1, 
                       self.file_manager.get_list_length(),
+                      len(files),
                       self.files_order,
                       "Desc" if inverse_order else "Asc")
 
@@ -1440,6 +1447,20 @@ class ViewerApp:
                 return
             kw_args[key] = value
         return kw_args
+
+    def get_args(self, args):
+        ret = []
+        for text, func, default in args:
+            dialog = TextEntryDialog(self.window, text + ":", str(default))
+            value = dialog.run()
+            if value is None:
+                return
+            try:
+                ret.append(func(value))
+            except Exception, e:
+                ErrorDialog(self.window, "Error: " + str(e)).run()
+                return
+        return ret
 
     def execute_viewer(self, args):
         main_py = os.path.join(os.path.dirname(__file__), "main.py")
@@ -1661,6 +1682,34 @@ class ViewerApp:
 
     def on_delete_current(self, _):
         self.undo_stack.push(self.file_manager.delete_current())
+
+    def on_mass_delete(self, _):
+        current, total = (self.file_manager.get_current_index() + 1, 
+                          self.file_manager.get_list_length())
+
+        args = [("First file to delete (current: %d)" % current, int, 1),
+                ("Last file to delete (current: %d)" % current, int, total)]
+
+        initial, final = self.get_args(args)
+
+        if not initial <= final or initial < 1 or final > total:
+            ErrorDialog(self.window, "Invalid range: %d - %d" % (initial, final)).run()
+            return
+
+        dialog = QuestionDialog(self.window,
+                                "Are you sure you want to delete from %d to %d?" \
+                                 % (initial, final))
+
+        if not dialog.run():
+            return
+
+        dialog = ProgressBarDialog(self.window, "Deleting files...")
+        dialog.show()
+        updater = Updater(self.file_manager.mass_delete(initial - 1, final - 1),
+                          dialog.update,
+                          lambda dialog: dialog.destroy(),
+                          (dialog,))
+        updater.start()
 
     def on_open_in_nautilus(self, widget):
         current_file = self.file_manager.get_current_file()

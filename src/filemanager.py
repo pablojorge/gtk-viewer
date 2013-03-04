@@ -287,6 +287,17 @@ class FileManager:
                       undo_action)
 
     @skip_if_empty
+    def mass_delete(self, initial, final):
+        for index in range(initial, final+1):
+            self.filelist.get_item_at(initial).trash()
+            self.filelist.remove(initial)
+            progress = float(index-initial) / ((final+1) - initial)
+            yield progress
+
+        self.index = min(self.filelist.get_length()-1, self.index)
+        self.on_list_modified()
+
+    @skip_if_empty
     def toggle_star(self):
         current = self.get_current_file()
         orig_dirname = current.get_dirname()
