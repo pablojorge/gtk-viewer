@@ -122,9 +122,9 @@ class ProgressBarDialog:
                                  parent=parent, 
                                  flags=gtk.DIALOG_MODAL)
 
-        label = gtk.Label()
-        label.set_text(text)
-        self.window.action_area.pack_start(label, True, True, 5)
+        self.label = gtk.Label()
+        self.label.set_text(text)
+        self.window.action_area.pack_start(self.label, True, True, 5)
 
         self.progressbar = gtk.ProgressBar()
         self.progressbar.set_pulse_step(0.1)
@@ -147,6 +147,10 @@ class ProgressBarDialog:
             self.progressbar.set_text("Elapsed: %s" % elapsed)
             self.progressbar.pulse()
             return
+
+        if type(fraction) is tuple:
+            text, fraction = fraction
+            self.label.set_text(text)
 
         if fraction < 0.0: fraction = 0.0
         if fraction > 1.0: fraction = 1.0

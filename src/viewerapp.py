@@ -16,6 +16,7 @@ from dialogs import (InfoDialog, ErrorDialog, AboutDialog, TextEntryDialog,
                      QuestionDialog, ProgressBarDialog, TabbedInfoDialog)
 from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
+from downloader import MultiDownloader
 
 from giffile import GIFGenerator
 from pdffile import PDFGenerator
@@ -617,6 +618,8 @@ class ViewerApp:
                              "accel" : "K",
                              "handler" : self.on_delete_current},
                             {"separator" : True},
+                            {"text" : "Mass download...",
+                             "handler" : self.on_mass_download},
                             {"text" : "Mass delete...",
                              "handler" : self.on_mass_delete},
                             {"separator" : True},
@@ -1705,6 +1708,36 @@ class ViewerApp:
 
     def on_delete_current(self, _):
         self.undo_stack.push(self.file_manager.delete_current())
+
+    def on_mass_download(self, _):
+        args = [("URL Pattern:", str, ""),
+                ("First index", int, ""),
+                ("Last index", int, "")]
+
+        pattern, initial, final = self.get_args(args)
+
+        if not initial <= final or initial < 1:
+            ErrorDialog(self.window, "Invalid range: %d - %d" % (initial, final)).run()
+            return
+
+        mdownloader = MultiDownloader(pattern, initial, final)
+
+        tmp_dir = tempfile.mkdtemp(suffix="gtk-viewer")
+        dialog = ProgressBarDialog(self.window, "Downloading files...")
+        dialog.show()
+        updater = Updater(mdownloader.run(tmp_dir),
+                          dialog.update,
+                          self.on_mass_download_finished,
+                          (tmp_dir, dialog,))
+        updater.start()
+
+    def on_mass_download_finished(self, tmp_dir, dialog):
+        try:
+            dialog.destroy()
+            # Run a separate instance of the viewer on this dir:
+            self.execute_viewer([tmp_dir])
+        finally:
+            shutil.rmtree(tmp_dir)
 
     def on_mass_delete(self, _):
         current, total = (self.file_manager.get_current_index() + 1, 
