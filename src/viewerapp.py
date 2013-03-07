@@ -255,6 +255,7 @@ class Pinbar:
         self.main_app = main_app
 
         self.active = True
+        self.auto = False
         self.pinbar_size = None
         self.thumb_array = []
         self.target_array = []
@@ -331,12 +332,19 @@ class Pinbar:
         if self.is_active():
             self.reset_targets()
 
-    def on_multi_associate(self, _):
-        if self.is_active():
-            for i in range(self.THUMB_COUNT):
-                self.associate_target(i)
+    def on_auto_associate(self, toggle):
+        self.auto = toggle.get_active()
 
-    def on_auto_associate(self, _):
+    def on_targets_updated(self, target_list):
+        if self.is_active() and self.auto:
+            for index in range(0, min(len(target_list), self.THUMB_COUNT)):
+                target = target_list[index]
+                thumbnail = DirectoryThumbnail(target)
+                self.set_target(index, thumbnail, target)
+            for index in range(len(target_list), self.THUMB_COUNT):
+                self.reset_target(index)
+
+    def on_multi_associate(self, _):
         def on_dir_selected(selection):
             scanner = FileScanner()
             dirs = scanner.get_dirs_from_dir(selection)
@@ -822,10 +830,10 @@ class ViewerApp:
                              "accel" : "P",
                              "key" : "pinbar_toggle",
                              "handler" : self.on_show_pinbar},
+                            {"toggle" : "Auto-associate buckets",
+                             "handler" : pinbar.on_auto_associate},
                             {"text" : "Associate all buckets",
                              "handler" : pinbar.on_multi_associate},
-                            {"text" : "Auto associate buckets",
-                             "handler" : pinbar.on_auto_associate},
                             {"text" : "Reset all buckets",
                              "handler" : pinbar.on_reset},
                             {"separator" : True},
@@ -1278,6 +1286,7 @@ class ViewerApp:
             self.last_targets.remove(target_dir)
 
         self.last_targets.insert(0, target_dir)
+        self.pinbar.on_targets_updated(self.last_targets)
 
     def copy_current(self, target_dir):
         self.update_target(target_dir)
