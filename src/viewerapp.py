@@ -18,6 +18,7 @@ from imageviewer import ImageViewer, ThumbnailViewer
 from thumbnail import DirectoryThumbnail
 from downloader import MultiDownloader
 
+from archivefile import ArchiveGenerator
 from giffile import GIFGenerator
 from pdffile import PDFGenerator
 
@@ -646,6 +647,8 @@ class ViewerApp:
                             {"menu" : {"text" : "Generate ...",
                                        "items" : [{"text" : "Animated GIF from set",
                                                    "handler" : self.on_generate_gif},
+                                                  {"text" : "Archive from set",
+                                                   "handler" : self.on_generate_archive},
                                                   {"text" : "PDF from set",
                                                    "handler" : self.on_generate_pdf}]}},
                             {"toggle" : "Enable animation",
@@ -1968,6 +1971,13 @@ class ViewerApp:
 
     def on_generate_gif(self, _):
         generator = GIFGenerator()
+        dialog = OutputDialog(self.window, 
+                              lambda filename: self.on_generate_file(generator, 
+                                                                     filename))
+        dialog.run()
+
+    def on_generate_archive(self, _):
+        generator = ArchiveGenerator()
         dialog = OutputDialog(self.window, 
                               lambda filename: self.on_generate_file(generator, 
                                                                      filename))

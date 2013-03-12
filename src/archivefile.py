@@ -3,6 +3,7 @@ import string
 import pexpect
 
 import gtk
+import zipfile
 
 from imagefile import ImageFile, Size
 from cache import cached
@@ -10,7 +11,12 @@ from system import execute
 
 class ArchiveFile(ImageFile):
     description = "archive"
-    valid_extensions = ["zip", "rar"]
+
+    zip_extensions = ["zip", "cbz"]
+    rar_extensions = ["rar", "cbr"]
+
+    valid_extensions = (zip_extensions + 
+                        rar_extensions)
 
     def __init__(self, filename):
         ImageFile.__init__(self, filename)
@@ -18,12 +24,13 @@ class ArchiveFile(ImageFile):
 
     @classmethod
     def build_delegate(cls, filename):
-        if filename.endswith("zip"):
-            return ZIPFile(filename)
-        elif filename.endswith("rar"):
-            return RARFile(filename)
-        else:
-            return None
+        for set_, delegate in ((cls.zip_extensions, ZIPFile),
+                               (cls.rar_extensions, RARFile)):
+            for extension in set_:
+                if filename.lower().endswith(extension):
+                    return delegate(filename)
+
+        assert(False)
 
     @cached()
     def get_pixbuf(self):
@@ -117,3 +124,15 @@ class RARFile:
         finally:
             os.chdir(cwd)
 
+class ArchiveGenerator:
+    def generate(self, files, output):
+        try:
+            output_ = zipfile.ZipFile(output, "w")
+            for index, file_ in enumerate(files):
+                output_.write(file_, os.path.basename(file_))
+                yield float(index+1) / len(files)
+        except Exception, e:
+            print "Warning:", e
+
+    def get_args(self):
+        return []
