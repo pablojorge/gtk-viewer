@@ -1285,10 +1285,10 @@ class ViewerApp:
 
     ## Internal helpers
     def update_target(self, target_dir):
-        if target_dir in self.last_targets:
-            self.last_targets.remove(target_dir)
-
-        self.last_targets.insert(0, target_dir)
+        if not target_dir in self.last_targets:
+            if len(self.last_targets) == self.pinbar.THUMB_COUNT:
+                del self.last_targets[-1]
+            self.last_targets.insert(0, target_dir)
         self.pinbar.on_targets_updated(self.last_targets)
 
     def copy_current(self, target_dir):
