@@ -1,8 +1,14 @@
 Bugs:
+ + 'v' can't be used in filter box (manual keybindings)
+ + 'esc' can't be used in filter box (manual keybindings)
+ + if directory already exists, no error is shown
+ + if some input matches one directory, and then the text of the input is changed + enter pressed, the previously
+   matched directory is used
  - When the filelist is filtered and an item is put back (after an undo)
    it may end up misplaced in the original (non-filtered) list
 
 Enhancements:
+ + Shortcut to create new dir in gallery view
  - Fix responsibilities of load, load_at_size methods (when to redraw, how to obtain size, default zoom factor when loading) -> fix how animated GIF are preloaded
  - Fix accelerators handled manually with key bindings (Left, Right, Esc, V)
  - Don't rely on external programs; reimplement using libraries (pdf, video, gif manipulation)
