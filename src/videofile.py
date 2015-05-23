@@ -17,7 +17,7 @@ from threading import Lock
 
 class VideoFile(ImageFile):
     description = "video"
-    valid_extensions = ["avi","mp4","flv","wmv","mpg","mov","m4v"]
+    valid_extensions = ["avi","mp4","flv","wmv","mpg","mov","m4v","webm", "3gp"]
     video_cache = Cache(10)
 
     def __init__(self, filename):
@@ -76,7 +76,7 @@ class VideoFile(ImageFile):
             return self.get_empty_pixbuf()
 
     def extract_frame_at(self, second, output):
-        execute(["ffmpeg", "-ss", str(second), 
+        execute(["avconv", "-ss", str(second),
                  "-i", self.get_filename(), 
                  "-vframes", "1",
                  "-an",
@@ -96,7 +96,7 @@ class VideoFile(ImageFile):
         try:
             if not count:
                 count = (self.get_duration()-offset) * rate
-            child = pexpect.spawn("ffmpeg", ["-ss", str(offset), 
+            child = pexpect.spawn("avconv", ["-ss", str(offset), 
                                              "-i", self.get_filename(), 
                                              "-r", str(rate), 
                                              "-qscale", "1", 
